@@ -18,7 +18,8 @@
     "generate": "bash scripts/pull-and-generate.sh",
     "bundle-oas": "tsx scripts/bundle-oas.ts",
     "generate-facade": "tsx scripts/generate-facade.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -37,6 +38,18 @@
     "typescript"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dragonxsx/zoho-desk-nodejs-sdk.git"
+  },
+  "homepage": "https://github.com/dragonxsx/zoho-desk-nodejs-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/dragonxsx/zoho-desk-nodejs-sdk/issues"
+  },
   "dependencies": {
     "@microsoft/kiota-abstractions": "^1.0.0-preview.100",
     "@microsoft/kiota-http-fetchlibrary": "^1.0.0-preview.100",

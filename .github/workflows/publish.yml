@@ -4,10 +4,17 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
 jobs:
   publish:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -19,6 +26,33 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      - run: npm publish --access public
+      - run: npm test
+
+      - name: Check if version already published
+        id: version-check
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+
+          PUBLISHED_VERSIONS=$(npm view @banana.inc/zoho-desk-nodejs-sdk versions --json 2>/dev/null || echo "[]")
+
+          if echo "$PUBLISHED_VERSIONS" | node -e "
+            const versions = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            const target = '$PACKAGE_VERSION';
+            const arr = Array.isArray(versions) ? versions : [versions];
+            process.exit(arr.includes(target) ? 1 : 0);
+          "; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "Version $PACKAGE_VERSION not yet published."
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Version $PACKAGE_VERSION already published — skipping."
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        if: steps.version-check.outputs.publish == 'true'
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
