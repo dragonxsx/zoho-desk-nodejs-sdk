@@ -34,7 +34,7 @@ jobs:
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
 
-          PUBLISHED_VERSIONS=$(npm view @banana.inc/zoho-desk-nodejs-sdk versions --json 2>/dev/null || echo "[]")
+          PUBLISHED_VERSIONS=$(npm view @banana.inc/zoho-desk-nodejs-sdk versions --json 2>/dev/null) || PUBLISHED_VERSIONS="[]"
 
           if echo "$PUBLISHED_VERSIONS" | node -e "
             const versions = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
