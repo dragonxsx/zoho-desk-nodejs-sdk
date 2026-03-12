@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizePathKey,
-  extractPathParams,
   buildParamNameMapping,
   remapParameterNames,
   stripFormatFromUnionTypes,
@@ -22,25 +21,6 @@ describe("normalizePathKey", () => {
 
   it("returns path unchanged if no parameters", () => {
     expect(normalizePathKey("/api/v1/items")).toBe("/api/v1/items");
-  });
-});
-
-describe("extractPathParams", () => {
-  it("extracts parameter names from path", () => {
-    expect(extractPathParams("/api/v1/items/{itemId}/entries")).toEqual([
-      "itemId",
-    ]);
-  });
-
-  it("extracts multiple parameters in order", () => {
-    expect(extractPathParams("/api/{orgId}/items/{itemId}")).toEqual([
-      "orgId",
-      "itemId",
-    ]);
-  });
-
-  it("returns empty array if no parameters", () => {
-    expect(extractPathParams("/api/v1/items")).toEqual([]);
   });
 });
 

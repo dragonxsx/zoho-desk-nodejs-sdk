@@ -1,5 +1,5 @@
 /**
- * Shared OpenAPI Specification utilities used by both merge-oas.ts and bundle-oas.ts.
+ * Shared OpenAPI Specification utilities used by bundle-oas.ts.
  */
 
 export interface OpenAPIDoc {
@@ -43,7 +43,7 @@ export function normalizePathKey(pathKey: string): string {
  * Extract parameter names from a path key.
  * Example: /api/v1/items/{itemId}/entries → ["itemId"]
  */
-export function extractPathParams(pathKey: string): string[] {
+function extractPathParams(pathKey: string): string[] {
   const params: string[] = [];
   const regex = /\{([^}]+)\}/g;
   let match;

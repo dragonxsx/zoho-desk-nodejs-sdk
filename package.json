@@ -16,7 +16,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "generate": "bash scripts/pull-and-generate.sh",
-    "merge-oas": "tsx scripts/merge-oas.ts",
     "bundle-oas": "tsx scripts/bundle-oas.ts",
     "generate-facade": "tsx scripts/generate-facade.ts",
     "lint": "tsc --noEmit"
