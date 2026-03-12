@@ -1,0 +1,57 @@
+{
+  "name": "@banana.inc/zoho-desk-nodejs-sdk",
+  "version": "0.1.0",
+  "description": "Zoho Desk Node.js SDK with OAuth 2.0, multi-data-center support, and token persistence",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "generate": "bash scripts/pull-and-generate.sh",
+    "merge-oas": "tsx scripts/merge-oas.ts",
+    "bundle-oas": "tsx scripts/bundle-oas.ts",
+    "generate-facade": "tsx scripts/generate-facade.ts",
+    "lint": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "zoho",
+    "desk",
+    "sdk",
+    "api",
+    "helpdesk",
+    "typescript"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@microsoft/kiota-abstractions": "^1.0.0-preview.100",
+    "@microsoft/kiota-http-fetchlibrary": "^1.0.0-preview.100",
+    "@microsoft/kiota-serialization-json": "^1.0.0-preview.100",
+    "@microsoft/kiota-serialization-text": "^1.0.0-preview.100",
+    "@microsoft/kiota-serialization-form": "^1.0.0-preview.100",
+    "@microsoft/kiota-serialization-multipart": "^1.0.0-preview.100",
+    "winston": "^3.11.0",
+    "undici": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "vitest": "^1.0.0"
+  }
+}

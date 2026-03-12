@@ -1,0 +1,52 @@
+Warning: KiotaBuilder Unable to check for updates
+Warning: KiotaBuilder OpenAPI warning: #/components/parameters/orgId/schema - The format int32 is not supported by Kiota for the type String and the string type will be used.
+Warning: KiotaBuilder Discriminator textFieldResponse is not inherited from commonFieldResponse.
+Warning: KiotaBuilder Discriminator commonFieldResponse is not inherited from textFieldResponse.
+Warning: KiotaBuilder Discriminator createTextFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createIntegerFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createPercentFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createDecimalFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createCurrencyFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createDateFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createDateTimeFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createEmailFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createPhoneFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createPickListFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createURLFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createTextAreaFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createBooleanFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createMultiPickListFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator createLargeTextFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator textFieldResponse is not inherited from createTextFieldResponse.
+Warning: KiotaBuilder Discriminator getTextFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getIntegerFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getPercentFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getDecimalFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getCurrencyFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getDateFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getDateTimeFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getEmailFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getPhoneFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getPickListFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getURLFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getTextAreaFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getBooleanFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getMultiPickListFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator getLargeTextFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator textFieldResponse is not inherited from getTextFieldResponse.
+Warning: KiotaBuilder Discriminator editTextFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editIntegerFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editPercentFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editDecimalFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editCurrencyFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editDateFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editDateTimeFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editEmailFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editPhoneFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editPickListFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editURLFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editTextAreaFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editBooleanFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editMultiPickListFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator editLargeTextFieldResponse is not a valid model and points to a union type.
+Warning: KiotaBuilder Discriminator textFieldResponse is not inherited from editTextFieldResponse.

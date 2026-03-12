@@ -1,0 +1,11 @@
+src/
+scripts/
+tests/
+.github/
+tsconfig.json
+combined-oas.json
+tmp-oas/
+*.tsbuildinfo
+.env*
+tokens.csv
+sdk.log
