@@ -1,6 +1,6 @@
 {
   "name": "@banana.inc/zoho-desk-nodejs-sdk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Zoho Desk Node.js SDK with OAuth 2.0, multi-data-center support, and token persistence",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
