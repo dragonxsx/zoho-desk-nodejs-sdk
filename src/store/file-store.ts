@@ -21,6 +21,7 @@ const HEADERS = [
  */
 export class FileStore implements TokenStore {
   private readonly filePath: string;
+  private _lock: Promise<void> = Promise.resolve();
 
   constructor(filePath: string) {
     this.filePath = filePath;
@@ -30,6 +31,20 @@ export class FileStore implements TokenStore {
   private ensureFile(): void {
     if (!fs.existsSync(this.filePath)) {
       fs.writeFileSync(this.filePath, HEADERS.join(",") + "\n", "utf-8");
+    }
+  }
+
+  private async serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = this._lock;
+    let release!: () => void;
+    this._lock = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
     }
   }
 
@@ -108,57 +123,66 @@ export class FileStore implements TokenStore {
   }
 
   async saveToken(token: Token): Promise<void> {
-    try {
-      const rows = await this.readAllRows();
+    await this.serialize(async () => {
+      try {
+        const rows = await this.readAllRows();
 
-      const newRow = [
-        token.getId() || String(rows.length + 1),
-        token.getClientId() || "",
-        token.getClientSecret() || "",
-        token.getRefreshToken() || "",
-        token.getAccessToken() || "",
-        token.getGrantToken() || "",
-        token.getExpiresIn() || "",
-        token.getRedirectURL() || "",
-      ];
+        const generatedId = token.getId() || String(rows.length + 1);
+        const newRow = [
+          generatedId,
+          token.getClientId() || "",
+          token.getClientSecret() || "",
+          token.getRefreshToken() || "",
+          token.getAccessToken() || "",
+          token.getGrantToken() || "",
+          token.getExpiresIn() || "",
+          token.getRedirectURL() || "",
+        ];
 
-      // Update existing or append
-      let found = false;
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i].length >= 2 && rows[i][0] === newRow[0]) {
-          rows[i] = newRow;
-          found = true;
-          break;
+        if (!token.getId()) {
+          token.setId(generatedId);
         }
-      }
-      if (!found) {
-        rows.push(newRow);
-      }
 
-      await this.writeAllRows(rows);
-    } catch (err) {
-      throw new SDKException(
-        "TOKEN_STORE_ERROR",
-        "Error saving token to file store.",
-        null,
-        err instanceof Error ? err : null,
-      );
-    }
+        // Update existing or append
+        let found = false;
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i].length >= 2 && rows[i][0] === newRow[0]) {
+            rows[i] = newRow;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          rows.push(newRow);
+        }
+
+        await this.writeAllRows(rows);
+      } catch (err) {
+        throw new SDKException(
+          "TOKEN_STORE_ERROR",
+          "Error saving token to file store.",
+          null,
+          err instanceof Error ? err : null,
+        );
+      }
+    });
   }
 
   async deleteToken(id: string): Promise<void> {
-    try {
-      const rows = await this.readAllRows();
-      const filtered = rows.filter((r) => r[0] !== id);
-      await this.writeAllRows(filtered);
-    } catch (err) {
-      throw new SDKException(
-        "TOKEN_STORE_ERROR",
-        "Error deleting token from file store.",
-        null,
-        err instanceof Error ? err : null,
-      );
-    }
+    await this.serialize(async () => {
+      try {
+        const rows = await this.readAllRows();
+        const filtered = rows.filter((r) => r[0] !== id);
+        await this.writeAllRows(filtered);
+      } catch (err) {
+        throw new SDKException(
+          "TOKEN_STORE_ERROR",
+          "Error deleting token from file store.",
+          null,
+          err instanceof Error ? err : null,
+        );
+      }
+    });
   }
 
   async getTokens(): Promise<Token[]> {
@@ -176,19 +200,21 @@ export class FileStore implements TokenStore {
   }
 
   async deleteTokens(): Promise<void> {
-    try {
-      await writeFile(
-        this.filePath,
-        HEADERS.join(",") + "\n",
-        "utf-8",
-      );
-    } catch (err) {
-      throw new SDKException(
-        "TOKEN_STORE_ERROR",
-        "Error deleting all tokens from file store.",
-        null,
-        err instanceof Error ? err : null,
-      );
-    }
+    await this.serialize(async () => {
+      try {
+        await writeFile(
+          this.filePath,
+          HEADERS.join(",") + "\n",
+          "utf-8",
+        );
+      } catch (err) {
+        throw new SDKException(
+          "TOKEN_STORE_ERROR",
+          "Error deleting all tokens from file store.",
+          null,
+          err instanceof Error ? err : null,
+        );
+      }
+    });
   }
 }
