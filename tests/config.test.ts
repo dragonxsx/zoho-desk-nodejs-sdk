@@ -26,4 +26,30 @@ describe("SDKConfig", () => {
     const config = new SDKConfigBuilder().timeout(-100).build();
     expect(config.getTimeout()).toBe(0);
   });
+
+  it("has sensible retry defaults", () => {
+    const config = new SDKConfigBuilder().build();
+    expect(config.getMaxRetries()).toBe(3);
+    expect(config.getRetryDelay()).toBe(3);
+  });
+
+  it("respects retry builder values", () => {
+    const config = new SDKConfigBuilder()
+      .maxRetries(5)
+      .retryDelay(10)
+      .build();
+
+    expect(config.getMaxRetries()).toBe(5);
+    expect(config.getRetryDelay()).toBe(10);
+  });
+
+  it("clamps maxRetries to 0–10", () => {
+    expect(new SDKConfigBuilder().maxRetries(-1).build().getMaxRetries()).toBe(0);
+    expect(new SDKConfigBuilder().maxRetries(15).build().getMaxRetries()).toBe(10);
+  });
+
+  it("clamps retryDelay to 0–180", () => {
+    expect(new SDKConfigBuilder().retryDelay(-5).build().getRetryDelay()).toBe(0);
+    expect(new SDKConfigBuilder().retryDelay(300).build().getRetryDelay()).toBe(180);
+  });
 });

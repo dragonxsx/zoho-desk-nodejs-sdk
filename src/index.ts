@@ -3,6 +3,12 @@ export { Token } from "./auth/token.js";
 export { OAuthToken } from "./auth/oauth-token.js";
 export { OAuthBuilder } from "./auth/oauth-builder.js";
 export { ZohoAuthenticationProvider } from "./auth/zoho-auth-provider.js";
+export {
+  generateCodeVerifier,
+  generateCodeChallenge,
+  generatePKCEPair,
+} from "./auth/pkce.js";
+export type { PKCEPair } from "./auth/pkce.js";
 
 // Data Centers
 export { Environment } from "./dc/environment.js";

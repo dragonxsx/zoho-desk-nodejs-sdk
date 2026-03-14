@@ -7,6 +7,7 @@ export abstract class Token {
   abstract authenticate(environment: Environment): Promise<string>;
   abstract remove(): Promise<void>;
   abstract generateToken(environment: Environment): Promise<void>;
+  abstract revoke(environment: Environment): Promise<void>;
   abstract getId(): string | null;
 
   abstract getClientId(): string | null;

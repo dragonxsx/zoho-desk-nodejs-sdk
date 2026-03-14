@@ -1,9 +1,14 @@
 import {
   FetchRequestAdapter,
   HttpClient,
+  MiddlewareFactory,
+  RetryHandler,
+  RetryHandlerOptions,
 } from "@microsoft/kiota-http-fetchlibrary";
+import type { Middleware } from "@microsoft/kiota-http-fetchlibrary";
 import type { AuthenticationProvider } from "@microsoft/kiota-abstractions";
 import type { RequestProxy } from "../proxy/request-proxy.js";
+import type { SDKConfig } from "../config/sdk-config.js";
 import { ProxyAgent } from "undici";
 
 /**
@@ -13,25 +18,39 @@ export function createRequestAdapter(
   authProvider: AuthenticationProvider,
   baseUrl: string,
   proxy?: RequestProxy | null,
+  sdkConfig?: SDKConfig | null,
 ): FetchRequestAdapter {
-  let httpClient: HttpClient;
+  let customFetch: ((request: string, init: RequestInit) => Promise<Response>) | undefined;
 
   if (proxy) {
     const proxyUrl = buildProxyUrl(proxy);
     const proxyAgent = new ProxyAgent(proxyUrl);
 
-    const customFetch = (request: string, init: RequestInit): Promise<Response> => {
+    customFetch = (request: string, init: RequestInit): Promise<Response> => {
       return fetch(request, {
         ...init,
         // Node.js undici dispatcher for proxy support
         dispatcher: proxyAgent,
       } as RequestInit);
     };
-
-    httpClient = new HttpClient(customFetch);
-  } else {
-    httpClient = new HttpClient();
   }
+
+  const middlewares = MiddlewareFactory.getDefaultMiddlewares(customFetch);
+
+  // Replace the default RetryHandler (first in chain) with one configured from SDKConfig
+  if (sdkConfig) {
+    const retryIndex = middlewares.findIndex((m) => m instanceof RetryHandler);
+    if (retryIndex !== -1) {
+      middlewares[retryIndex] = new RetryHandler(
+        new RetryHandlerOptions({
+          maxRetries: sdkConfig.getMaxRetries(),
+          delay: sdkConfig.getRetryDelay(),
+        }),
+      );
+    }
+  }
+
+  const httpClient = new HttpClient(customFetch, ...middlewares);
 
   const adapter = new FetchRequestAdapter(authProvider, undefined, undefined, httpClient);
   adapter.baseUrl = baseUrl;

@@ -14,6 +14,7 @@ interface OAuthTokenOptions {
   grantToken?: string;
   redirectURL?: string;
   id?: string;
+  codeVerifier?: string;
 }
 
 export class OAuthToken extends Token {
@@ -25,6 +26,7 @@ export class OAuthToken extends Token {
   private _redirectURL: string | null;
   private _expiresIn: string | null = null;
   private _id: string | null;
+  private _codeVerifier: string | null;
 
   private _store: TokenStore | null = null;
 
@@ -37,6 +39,7 @@ export class OAuthToken extends Token {
     this._grantToken = options.grantToken ?? null;
     this._redirectURL = options.redirectURL ?? null;
     this._id = options.id ?? null;
+    this._codeVerifier = options.codeVerifier ?? null;
   }
 
   // Getters
@@ -147,6 +150,64 @@ export class OAuthToken extends Token {
   }
 
   /**
+   * Revoke the refresh token via Zoho's revoke endpoint.
+   */
+  async revoke(environment: Environment): Promise<void> {
+    const refreshToken = this._refreshToken;
+    if (!refreshToken) {
+      throw new SDKException(
+        "TOKEN_REVOKE_ERROR",
+        "No refresh token available to revoke.",
+      );
+    }
+
+    const accountsUrl = environment.getAccountsUrl();
+    // accounts URL is e.g. https://accounts.zoho.com/oauth/v2/token
+    // revoke endpoint is https://accounts.zoho.com/oauth/v2/token/revoke
+    const revokeUrl = accountsUrl.replace(/\/token$/, "/token/revoke");
+
+    const params = new URLSearchParams({
+      token: refreshToken,
+    });
+
+    try {
+      const response = await fetch(revokeUrl, {
+        method: "POST",
+        body: params,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
+
+      const data = (await response.json()) as Record<string, unknown>;
+
+      if (data.error || (!response.ok && data.status !== "success")) {
+        throw new SDKException(
+          "TOKEN_REVOKE_ERROR",
+          `Token revocation failed: ${(data.error as string) || response.statusText}`,
+          data,
+        );
+      }
+
+      // Clear local token state
+      this._accessToken = null;
+      this._refreshToken = null;
+      this._expiresIn = null;
+
+      // Remove from store
+      await this.remove();
+    } catch (err) {
+      if (err instanceof SDKException) throw err;
+      throw new SDKException(
+        "TOKEN_REVOKE_ERROR",
+        "Error revoking token.",
+        null,
+        err instanceof Error ? err : null,
+      );
+    }
+  }
+
+  /**
    * Refresh access token using refresh_token grant.
    */
   private async refreshAccessToken(environment: Environment): Promise<void> {
@@ -220,6 +281,10 @@ export class OAuthToken extends Token {
 
     if (this._redirectURL) {
       params.set("redirect_uri", this._redirectURL);
+    }
+
+    if (this._codeVerifier) {
+      params.set("code_verifier", this._codeVerifier);
     }
 
     try {

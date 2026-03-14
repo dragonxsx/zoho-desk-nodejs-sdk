@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import type { TokenStore } from "./token-store.js";
 import type { Token } from "../auth/token.js";
 import { OAuthToken } from "../auth/oauth-token.js";
@@ -32,16 +33,16 @@ export class FileStore implements TokenStore {
     }
   }
 
-  private readAllRows(): string[][] {
-    const content = fs.readFileSync(this.filePath, "utf-8").trim();
+  private async readAllRows(): Promise<string[][]> {
+    const content = (await readFile(this.filePath, "utf-8")).trim();
     const lines = content.split("\n");
     // Skip header
     return lines.slice(1).map((line) => line.split(","));
   }
 
-  private writeAllRows(rows: string[][]): void {
+  private async writeAllRows(rows: string[][]): Promise<void> {
     const lines = [HEADERS.join(","), ...rows.map((r) => r.join(","))];
-    fs.writeFileSync(this.filePath, lines.join("\n") + "\n", "utf-8");
+    await writeFile(this.filePath, lines.join("\n") + "\n", "utf-8");
   }
 
   private rowToToken(row: string[]): OAuthToken {
@@ -60,7 +61,7 @@ export class FileStore implements TokenStore {
 
   async findToken(token: Token): Promise<Token | null> {
     try {
-      const rows = this.readAllRows();
+      const rows = await this.readAllRows();
       for (const row of rows) {
         if (row.length < 8) continue;
         const clientId = token.getClientId();
@@ -89,7 +90,7 @@ export class FileStore implements TokenStore {
 
   async findTokenById(id: string): Promise<Token | null> {
     try {
-      const rows = this.readAllRows();
+      const rows = await this.readAllRows();
       for (const row of rows) {
         if (row.length >= 8 && row[0] === id) {
           return this.rowToToken(row);
@@ -108,7 +109,7 @@ export class FileStore implements TokenStore {
 
   async saveToken(token: Token): Promise<void> {
     try {
-      const rows = this.readAllRows();
+      const rows = await this.readAllRows();
 
       const newRow = [
         token.getId() || String(rows.length + 1),
@@ -134,7 +135,7 @@ export class FileStore implements TokenStore {
         rows.push(newRow);
       }
 
-      this.writeAllRows(rows);
+      await this.writeAllRows(rows);
     } catch (err) {
       throw new SDKException(
         "TOKEN_STORE_ERROR",
@@ -147,9 +148,9 @@ export class FileStore implements TokenStore {
 
   async deleteToken(id: string): Promise<void> {
     try {
-      const rows = this.readAllRows();
+      const rows = await this.readAllRows();
       const filtered = rows.filter((r) => r[0] !== id);
-      this.writeAllRows(filtered);
+      await this.writeAllRows(filtered);
     } catch (err) {
       throw new SDKException(
         "TOKEN_STORE_ERROR",
@@ -162,7 +163,7 @@ export class FileStore implements TokenStore {
 
   async getTokens(): Promise<Token[]> {
     try {
-      const rows = this.readAllRows();
+      const rows = await this.readAllRows();
       return rows.filter((r) => r.length >= 8).map((r) => this.rowToToken(r));
     } catch (err) {
       throw new SDKException(
@@ -176,7 +177,7 @@ export class FileStore implements TokenStore {
 
   async deleteTokens(): Promise<void> {
     try {
-      fs.writeFileSync(
+      await writeFile(
         this.filePath,
         HEADERS.join(",") + "\n",
         "utf-8",
