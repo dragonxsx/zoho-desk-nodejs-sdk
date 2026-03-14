@@ -4,6 +4,8 @@ export class SDKConfigBuilder {
   private _autoRefreshFields = false;
   private _pickListValidation = true;
   private _timeout = 0;
+  private _maxRetries = 3;
+  private _retryDelay = 3;
 
   autoRefreshFields(autoRefreshFields: boolean): this {
     this._autoRefreshFields = autoRefreshFields;
@@ -20,11 +22,23 @@ export class SDKConfigBuilder {
     return this;
   }
 
+  maxRetries(maxRetries: number): this {
+    this._maxRetries = Math.max(0, Math.min(10, maxRetries));
+    return this;
+  }
+
+  retryDelay(retryDelay: number): this {
+    this._retryDelay = Math.max(0, Math.min(180, retryDelay));
+    return this;
+  }
+
   build(): SDKConfig {
     return new SDKConfig(
       this._autoRefreshFields,
       this._pickListValidation,
       this._timeout,
+      this._maxRetries,
+      this._retryDelay,
     );
   }
 }

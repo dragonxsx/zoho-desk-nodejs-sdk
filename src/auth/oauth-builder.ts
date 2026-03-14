@@ -9,6 +9,7 @@ export class OAuthBuilder {
   private _accessToken: string | null = null;
   private _redirectURL: string | null = null;
   private _id: string | null = null;
+  private _codeVerifier: string | null = null;
 
   clientId(clientId: string): this {
     this._clientId = clientId;
@@ -45,6 +46,11 @@ export class OAuthBuilder {
     return this;
   }
 
+  codeVerifier(codeVerifier: string): this {
+    this._codeVerifier = codeVerifier;
+    return this;
+  }
+
   build(): OAuthToken {
     if (!this._grantToken && !this._refreshToken && !this._accessToken && !this._id) {
       throw new SDKException(
@@ -68,6 +74,7 @@ export class OAuthBuilder {
       accessToken: this._accessToken ?? undefined,
       redirectURL: this._redirectURL ?? undefined,
       id: this._id ?? undefined,
+      codeVerifier: this._codeVerifier ?? undefined,
     });
   }
 }

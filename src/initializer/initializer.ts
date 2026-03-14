@@ -123,6 +123,7 @@ export class Initializer {
       authProvider,
       this._environment.getUrl(),
       this._requestProxy,
+      this._sdkConfig,
     );
   }
 }

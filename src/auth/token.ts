@@ -7,7 +7,13 @@ export abstract class Token {
   abstract authenticate(environment: Environment): Promise<string>;
   abstract remove(): Promise<void>;
   abstract generateToken(environment: Environment): Promise<void>;
+  async revoke(_environment: Environment): Promise<void> {
+    throw new Error("revoke() is not supported on this token type.");
+  }
   abstract getId(): string | null;
+
+  // No-op by default; overridden in OAuthToken.
+  setId(_id: string | null): void {}
 
   abstract getClientId(): string | null;
   abstract getClientSecret(): string | null;
