@@ -16,6 +16,7 @@ const HEADERS = [
   "redirect_url",
   "grant_type",
   "scope",
+  "org_id",
 ];
 
 /**
@@ -72,6 +73,7 @@ export class FileStore implements TokenStore {
       redirectURL: row[7] || undefined,
       grantType: (row[8] as OAuthGrantType) || undefined,
       scope: row[9] || undefined,
+      orgId: row[10] || undefined,
     });
     token.setId(row[0] || null);
     token.setExpiresIn(row[6] || null);
@@ -148,6 +150,7 @@ export class FileStore implements TokenStore {
           token.getRedirectURL() || "",
           token.getGrantType() || "",
           token.getScope() || "",
+          token.getOrgId() || "",
         ];
 
         if (!token.getId()) {

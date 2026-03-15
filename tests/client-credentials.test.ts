@@ -64,10 +64,56 @@ describe("Client Credentials Grant", () => {
           .build();
       }).toThrow(SDKException);
     });
+
+    it("builds a client_credentials token with orgId", () => {
+      const token = new OAuthBuilder()
+        .clientId("cid")
+        .clientSecret("csecret")
+        .scope("Desk.tickets.ALL")
+        .orgId("12345")
+        .clientCredentials()
+        .build();
+
+      expect(token.getOrgId()).toBe("12345");
+    });
   });
 
   describe("OAuthToken.authenticate — client_credentials", () => {
-    it("requests token with correct parameters", async () => {
+    it("requests token with correct parameters including org_id", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ access_token: "at-123", expires_in: 3600 }),
+          { status: 200 },
+        ),
+      );
+
+      const token = new OAuthToken({
+        clientId: "cid",
+        clientSecret: "csecret",
+        grantType: OAuthGrantType.CLIENT_CREDENTIALS,
+        scope: "Desk.tickets.ALL",
+        orgId: "12345",
+      });
+
+      const result = await token.authenticate(env);
+
+      expect(result).toBe("at-123");
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "https://accounts.zoho.com/oauth/v2/token",
+        expect.objectContaining({ method: "POST" }),
+      );
+
+      // Verify the body contains correct grant_type and org_id
+      const call = fetchSpy.mock.calls[0];
+      const body = call[1]!.body as URLSearchParams;
+      expect(body.get("grant_type")).toBe("client_credentials");
+      expect(body.get("scope")).toBe("Desk.tickets.ALL");
+      expect(body.get("client_id")).toBe("cid");
+      expect(body.get("client_secret")).toBe("csecret");
+      expect(body.get("org_id")).toBe("12345");
+    });
+
+    it("does not send org_id when not set", async () => {
       fetchSpy.mockResolvedValueOnce(
         new Response(
           JSON.stringify({ access_token: "at-123", expires_in: 3600 }),
@@ -82,21 +128,11 @@ describe("Client Credentials Grant", () => {
         scope: "Desk.tickets.ALL",
       });
 
-      const result = await token.authenticate(env);
+      await token.authenticate(env);
 
-      expect(result).toBe("at-123");
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "https://accounts.zoho.com/oauth/v2/token",
-        expect.objectContaining({ method: "POST" }),
-      );
-
-      // Verify the body contains correct grant_type
       const call = fetchSpy.mock.calls[0];
       const body = call[1]!.body as URLSearchParams;
-      expect(body.get("grant_type")).toBe("client_credentials");
-      expect(body.get("scope")).toBe("Desk.tickets.ALL");
-      expect(body.get("client_id")).toBe("cid");
-      expect(body.get("client_secret")).toBe("csecret");
+      expect(body.has("org_id")).toBe(false);
     });
 
     it("re-requests on expiry instead of refreshing", async () => {

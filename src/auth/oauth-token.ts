@@ -27,6 +27,7 @@ interface OAuthTokenOptions {
   codeVerifier?: string;
   grantType?: OAuthGrantType;
   scope?: string;
+  orgId?: string;
 }
 
 export class OAuthToken extends Token {
@@ -41,6 +42,7 @@ export class OAuthToken extends Token {
   private _codeVerifier: string | null;
   private _grantType: OAuthGrantType | null;
   private _scope: string | null;
+  private _orgId: string | null;
 
   private _store: TokenStore | null = null;
 
@@ -56,6 +58,7 @@ export class OAuthToken extends Token {
     this._codeVerifier = options.codeVerifier ?? null;
     this._grantType = options.grantType ?? null;
     this._scope = options.scope ?? null;
+    this._orgId = options.orgId ?? null;
   }
 
   // Getters
@@ -89,6 +92,9 @@ export class OAuthToken extends Token {
   override getScope(): string | null {
     return this._scope;
   }
+  override getOrgId(): string | null {
+    return this._orgId;
+  }
 
   // Setters
   setId(id: string | null): void {
@@ -111,6 +117,9 @@ export class OAuthToken extends Token {
   }
   setScope(scope: string | null): void {
     this._scope = scope;
+  }
+  setOrgId(orgId: string | null): void {
+    this._orgId = orgId;
   }
 
   /**
@@ -281,6 +290,9 @@ export class OAuthToken extends Token {
       grant_type: "client_credentials",
       scope: this._scope || "",
     });
+    if (this._orgId) {
+      params.set("org_id", this._orgId);
+    }
 
     try {
       const response = await fetch(accountsUrl, {

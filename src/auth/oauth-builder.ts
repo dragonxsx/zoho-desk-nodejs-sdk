@@ -12,6 +12,7 @@ export class OAuthBuilder {
   private _codeVerifier: string | null = null;
   private _grantType: OAuthGrantType | null = null;
   private _scope: string | null = null;
+  private _orgId: string | null = null;
 
   clientId(clientId: string): this {
     this._clientId = clientId;
@@ -58,6 +59,11 @@ export class OAuthBuilder {
     return this;
   }
 
+  orgId(orgId: string): this {
+    this._orgId = orgId;
+    return this;
+  }
+
   clientCredentials(): this {
     this._grantType = OAuthGrantType.CLIENT_CREDENTIALS;
     return this;
@@ -84,6 +90,7 @@ export class OAuthBuilder {
         id: this._id ?? undefined,
         grantType: OAuthGrantType.CLIENT_CREDENTIALS,
         scope: this._scope,
+        orgId: this._orgId ?? undefined,
       });
     }
 

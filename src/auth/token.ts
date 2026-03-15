@@ -29,4 +29,7 @@ export abstract class Token {
   getScope(): string | null {
     return null;
   }
+  getOrgId(): string | null {
+    return null;
+  }
 }
