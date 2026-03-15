@@ -84,13 +84,19 @@ export class OAuthBuilder {
           "scope is required for client_credentials grant.",
         );
       }
+      if (!this._orgId) {
+        throw new SDKException(
+          "MANDATORY_VALUE_ERROR",
+          "orgId is required for client_credentials grant.",
+        );
+      }
       return new OAuthToken({
         clientId: this._clientId,
         clientSecret: this._clientSecret,
         id: this._id ?? undefined,
         grantType: OAuthGrantType.CLIENT_CREDENTIALS,
         scope: this._scope,
-        orgId: this._orgId ?? undefined,
+        orgId: this._orgId,
       });
     }
 

@@ -10,6 +10,7 @@ import type { AuthenticationProvider } from "@microsoft/kiota-abstractions";
 import type { RequestProxy } from "../proxy/request-proxy.js";
 import type { SDKConfig } from "../config/sdk-config.js";
 import { ProxyAgent } from "undici";
+import { ZohoErrorMiddleware } from "./zoho-error-middleware.js";
 
 /**
  * Creates a Kiota FetchRequestAdapter wired with Zoho auth and optional proxy.
@@ -37,7 +38,10 @@ export function createRequestAdapter(
 
   const middlewares = MiddlewareFactory.getDefaultMiddlewares(customFetch);
 
-  // Replace the default RetryHandler (first in chain) with one configured from SDKConfig
+  // Insert error middleware first so it runs AFTER retry/redirect in the response flow
+  middlewares.unshift(new ZohoErrorMiddleware());
+
+  // Replace the default RetryHandler with one configured from SDKConfig
   if (sdkConfig) {
     const retryIndex = middlewares.findIndex((m) => m instanceof RetryHandler);
     if (retryIndex !== -1) {

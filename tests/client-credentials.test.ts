@@ -26,6 +26,7 @@ describe("Client Credentials Grant", () => {
         .clientId("cid")
         .clientSecret("csecret")
         .scope("Desk.tickets.ALL")
+        .orgId("12345")
         .clientCredentials()
         .build();
 
@@ -40,6 +41,7 @@ describe("Client Credentials Grant", () => {
         new OAuthBuilder()
           .clientSecret("csecret")
           .scope("Desk.tickets.ALL")
+          .orgId("12345")
           .clientCredentials()
           .build();
       }).toThrow(SDKException);
@@ -50,6 +52,7 @@ describe("Client Credentials Grant", () => {
         new OAuthBuilder()
           .clientId("cid")
           .scope("Desk.tickets.ALL")
+          .orgId("12345")
           .clientCredentials()
           .build();
       }).toThrow(SDKException);
@@ -60,6 +63,17 @@ describe("Client Credentials Grant", () => {
         new OAuthBuilder()
           .clientId("cid")
           .clientSecret("csecret")
+          .clientCredentials()
+          .build();
+      }).toThrow(SDKException);
+    });
+
+    it("throws if orgId missing for client_credentials", () => {
+      expect(() => {
+        new OAuthBuilder()
+          .clientId("cid")
+          .clientSecret("csecret")
+          .scope("Desk.tickets.ALL")
           .clientCredentials()
           .build();
       }).toThrow(SDKException);
@@ -79,7 +93,7 @@ describe("Client Credentials Grant", () => {
   });
 
   describe("OAuthToken.authenticate — client_credentials", () => {
-    it("requests token with correct parameters including org_id", async () => {
+    it("requests token with correct parameters including soid", async () => {
       fetchSpy.mockResolvedValueOnce(
         new Response(
           JSON.stringify({ access_token: "at-123", expires_in: 3600 }),
@@ -103,17 +117,40 @@ describe("Client Credentials Grant", () => {
         expect.objectContaining({ method: "POST" }),
       );
 
-      // Verify the body contains correct grant_type and org_id
+      // Verify the body contains correct grant_type and soid
       const call = fetchSpy.mock.calls[0];
       const body = call[1]!.body as URLSearchParams;
       expect(body.get("grant_type")).toBe("client_credentials");
       expect(body.get("scope")).toBe("Desk.tickets.ALL");
       expect(body.get("client_id")).toBe("cid");
       expect(body.get("client_secret")).toBe("csecret");
-      expect(body.get("org_id")).toBe("12345");
+      expect(body.get("soid")).toBe("Desk.12345");
     });
 
-    it("does not send org_id when not set", async () => {
+    it("sends pre-formatted soid as-is", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ access_token: "at-123", expires_in: 3600 }),
+          { status: 200 },
+        ),
+      );
+
+      const token = new OAuthToken({
+        clientId: "cid",
+        clientSecret: "csecret",
+        grantType: OAuthGrantType.CLIENT_CREDENTIALS,
+        scope: "Desk.tickets.ALL",
+        orgId: "Desk.12345",
+      });
+
+      await token.authenticate(env);
+
+      const call = fetchSpy.mock.calls[0];
+      const body = call[1]!.body as URLSearchParams;
+      expect(body.get("soid")).toBe("Desk.12345");
+    });
+
+    it("does not send soid when not set", async () => {
       fetchSpy.mockResolvedValueOnce(
         new Response(
           JSON.stringify({ access_token: "at-123", expires_in: 3600 }),
@@ -132,7 +169,7 @@ describe("Client Credentials Grant", () => {
 
       const call = fetchSpy.mock.calls[0];
       const body = call[1]!.body as URLSearchParams;
-      expect(body.has("org_id")).toBe(false);
+      expect(body.has("soid")).toBe(false);
     });
 
     it("re-requests on expiry instead of refreshing", async () => {

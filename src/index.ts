@@ -42,6 +42,7 @@ export { ProxyBuilder } from "./proxy/proxy-builder.js";
 
 // Exception
 export { SDKException } from "./exception/sdk-exception.js";
+export { ZohoApiError } from "./exception/zoho-api-error.js";
 
 // HTTP
 export { createRequestAdapter } from "./http/zoho-http-client.js";

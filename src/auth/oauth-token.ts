@@ -291,7 +291,8 @@ export class OAuthToken extends Token {
       scope: this._scope || "",
     });
     if (this._orgId) {
-      params.set("org_id", this._orgId);
+      const soid = this._orgId.includes(".") ? this._orgId : `Desk.${this._orgId}`;
+      params.set("soid", soid);
     }
 
     try {
