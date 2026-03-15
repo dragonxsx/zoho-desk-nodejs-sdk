@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 
 const CODE_VERIFIER_CHARSET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
@@ -20,9 +20,7 @@ export function generateCodeVerifier(length: number = 128): string {
  * Generate a code challenge from a code verifier using SHA-256 + base64url.
  */
 export async function generateCodeChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const digest = await crypto.subtle.digest("SHA-256", data);
+  const digest = createHash("sha256").update(verifier).digest();
   return base64UrlEncode(new Uint8Array(digest));
 }
 
