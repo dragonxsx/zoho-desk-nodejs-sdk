@@ -46,6 +46,7 @@ export { ZohoApiError } from "./exception/zoho-api-error.js";
 
 // HTTP
 export { createRequestAdapter } from "./http/zoho-http-client.js";
+export { EmptyQueryParamMiddleware } from "./http/empty-query-param-middleware.js";
 
 // Initializer
 export { Initializer } from "./initializer/initializer.js";

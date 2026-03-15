@@ -139,6 +139,102 @@ describe("ZohoErrorMiddleware", () => {
     }
   });
 
+  it("captures response headers on the error", async () => {
+    const response = new Response(JSON.stringify({ errorCode: "INVALID", message: "bad" }), {
+      status: 400,
+      headers: { "X-Request-Id": "abc-123", "Content-Type": "application/json" },
+    });
+    middleware.next = new StubMiddleware(response);
+
+    try {
+      await middleware.execute("https://desk.zoho.com/api/v1/tickets", {});
+      expect.fail("should have thrown");
+    } catch (err) {
+      const apiErr = err as ZohoApiError;
+      expect(apiErr.responseHeaders).toBeDefined();
+      // Fetch Headers normalizes keys to lowercase
+      expect(apiErr.responseHeaders!["x-request-id"]).toEqual(["abc-123"]);
+      expect(apiErr.responseHeaders!["content-type"]).toEqual(["application/json"]);
+    }
+  });
+
+  it("captures the request URL on the error", async () => {
+    const response = new Response(JSON.stringify({ errorCode: "NOT_FOUND", message: "missing" }), {
+      status: 404,
+    });
+    middleware.next = new StubMiddleware(response);
+
+    try {
+      await middleware.execute("https://desk.zoho.com/api/v1/tickets/999", {});
+      expect.fail("should have thrown");
+    } catch (err) {
+      const apiErr = err as ZohoApiError;
+      expect(apiErr.requestUrl).toBe("https://desk.zoho.com/api/v1/tickets/999");
+    }
+  });
+
+  it("falls back to errorMessage when message is absent", async () => {
+    const body = { errorCode: "MASS_ERROR", errorMessage: "Bulk operation failed" };
+    const response = new Response(JSON.stringify(body), { status: 400 });
+    middleware.next = new StubMiddleware(response);
+
+    try {
+      await middleware.execute("https://desk.zoho.com/api/v1/tickets", {});
+      expect.fail("should have thrown");
+    } catch (err) {
+      const apiErr = err as ZohoApiError;
+      expect(apiErr.message).toContain("Bulk operation failed");
+      expect(apiErr.errorCode).toBe("MASS_ERROR");
+    }
+  });
+
+  it("falls back to error string when both message and errorMessage are absent", async () => {
+    const body = { error: "Access denied" };
+    const response = new Response(JSON.stringify(body), { status: 403 });
+    middleware.next = new StubMiddleware(response);
+
+    try {
+      await middleware.execute("https://desk.zoho.com/api/v1/tickets", {});
+      expect.fail("should have thrown");
+    } catch (err) {
+      const apiErr = err as ZohoApiError;
+      expect(apiErr.message).toContain("Access denied");
+    }
+  });
+
+  it("includes headers and URL for non-JSON error responses", async () => {
+    const response = new Response("Service Unavailable", {
+      status: 503,
+      headers: { "Retry-After": "30" },
+    });
+    middleware.next = new StubMiddleware(response);
+
+    try {
+      await middleware.execute("https://desk.zoho.com/api/v1/tickets", {});
+      expect.fail("should have thrown");
+    } catch (err) {
+      const apiErr = err as ZohoApiError;
+      expect(apiErr.requestUrl).toBe("https://desk.zoho.com/api/v1/tickets");
+      expect(apiErr.responseHeaders!["retry-after"]).toEqual(["30"]);
+      expect(apiErr.rawBody).toBe("Service Unavailable");
+    }
+  });
+
+  it("message takes priority over errorMessage when both are present", async () => {
+    const body = { errorCode: "ERR", message: "Primary message", errorMessage: "Secondary message" };
+    const response = new Response(JSON.stringify(body), { status: 422 });
+    middleware.next = new StubMiddleware(response);
+
+    try {
+      await middleware.execute("https://desk.zoho.com/api/v1/tickets", {});
+      expect.fail("should have thrown");
+    } catch (err) {
+      const apiErr = err as ZohoApiError;
+      expect(apiErr.message).toContain("Primary message");
+      expect(apiErr.message).not.toContain("Secondary message");
+    }
+  });
+
   it("thrown error is instanceof Error and has .stack", async () => {
     const response = new Response(JSON.stringify({ errorCode: "BAD_REQUEST", message: "Invalid" }), {
       status: 400,

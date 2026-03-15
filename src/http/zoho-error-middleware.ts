@@ -2,6 +2,18 @@ import type { Middleware } from "@microsoft/kiota-http-fetchlibrary";
 import type { RequestOption } from "@microsoft/kiota-abstractions";
 import { ZohoApiError } from "../exception/zoho-api-error.js";
 
+function headersToRecord(headers: Headers): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  headers.forEach((value, key) => {
+    if (result[key]) {
+      result[key].push(value);
+    } else {
+      result[key] = [value];
+    }
+  });
+  return result;
+}
+
 /**
  * Kiota middleware that intercepts non-2xx Zoho API responses and throws
  * a ZohoApiError with the actual error details from the response body.
@@ -28,6 +40,8 @@ export class ZohoErrorMiddleware implements Middleware {
       return response;
     }
 
+    const responseHeaders = headersToRecord(response.headers);
+
     // Read the error response body
     const cloned = response.clone();
     let bodyText: string;
@@ -37,6 +51,8 @@ export class ZohoErrorMiddleware implements Middleware {
       throw new ZohoApiError({
         message: `Zoho API error: HTTP ${response.status} (empty response body)`,
         statusCode: response.status,
+        responseHeaders,
+        requestUrl: url,
       });
     }
 
@@ -45,6 +61,8 @@ export class ZohoErrorMiddleware implements Middleware {
       throw new ZohoApiError({
         message: `Zoho API error: HTTP ${response.status} (empty response body)`,
         statusCode: response.status,
+        responseHeaders,
+        requestUrl: url,
       });
     }
 
@@ -58,12 +76,17 @@ export class ZohoErrorMiddleware implements Middleware {
         message: `Zoho API error: HTTP ${response.status} (non-JSON response)`,
         statusCode: response.status,
         rawBody: bodyText,
+        responseHeaders,
+        requestUrl: url,
       });
     }
 
     // Extract Zoho-specific error fields
     const errorCode = typeof parsed.errorCode === "string" ? parsed.errorCode : undefined;
-    const message = typeof parsed.message === "string" ? parsed.message : undefined;
+    const message =
+      (typeof parsed.message === "string" ? parsed.message : undefined) ??
+      (typeof parsed.errorMessage === "string" ? parsed.errorMessage : undefined) ??
+      (typeof parsed.error === "string" ? parsed.error : undefined);
 
     if (message) {
       throw new ZohoApiError({
@@ -72,6 +95,8 @@ export class ZohoErrorMiddleware implements Middleware {
         errorCode,
         responseBody: parsed,
         rawBody: bodyText,
+        responseHeaders,
+        requestUrl: url,
       });
     }
 
@@ -80,6 +105,8 @@ export class ZohoErrorMiddleware implements Middleware {
       statusCode: response.status,
       responseBody: parsed,
       rawBody: bodyText,
+      responseHeaders,
+      requestUrl: url,
     });
   }
 }

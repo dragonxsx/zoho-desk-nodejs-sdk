@@ -10,6 +10,7 @@ export class ZohoApiError extends Error implements ApiError {
   public readonly rawBody: string | undefined;
   public responseStatusCode: number | undefined;
   public responseHeaders: Record<string, string[]> | undefined;
+  public readonly requestUrl: string | undefined;
 
   constructor(options: {
     message: string;
@@ -18,6 +19,7 @@ export class ZohoApiError extends Error implements ApiError {
     responseBody?: Record<string, unknown>;
     rawBody?: string;
     responseHeaders?: Record<string, string[]>;
+    requestUrl?: string;
   }) {
     super(options.message);
     this.name = "ZohoApiError";
@@ -26,5 +28,6 @@ export class ZohoApiError extends Error implements ApiError {
     this.responseBody = options.responseBody;
     this.rawBody = options.rawBody;
     this.responseHeaders = options.responseHeaders;
+    this.requestUrl = options.requestUrl;
   }
 }

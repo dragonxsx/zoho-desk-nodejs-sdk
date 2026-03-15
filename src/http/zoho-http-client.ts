@@ -11,6 +11,7 @@ import type { RequestProxy } from "../proxy/request-proxy.js";
 import type { SDKConfig } from "../config/sdk-config.js";
 import { ProxyAgent } from "undici";
 import { ZohoErrorMiddleware } from "./zoho-error-middleware.js";
+import { EmptyQueryParamMiddleware } from "./empty-query-param-middleware.js";
 
 /**
  * Creates a Kiota FetchRequestAdapter wired with Zoho auth and optional proxy.
@@ -40,6 +41,9 @@ export function createRequestAdapter(
 
   // Insert error middleware first so it runs AFTER retry/redirect in the response flow
   middlewares.unshift(new ZohoErrorMiddleware());
+
+  // Strip empty query params before anything else (fixes orgId="" → HTTP 500)
+  middlewares.unshift(new EmptyQueryParamMiddleware());
 
   // Replace the default RetryHandler with one configured from SDKConfig
   if (sdkConfig) {
