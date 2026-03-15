@@ -14,4 +14,12 @@ export class Environment {
   getAccountsUrl(): string {
     return this._accountsUrl;
   }
+
+  getAuthorizationUrl(): string {
+    return this._accountsUrl.replace(/\/token$/, "/auth");
+  }
+
+  getDeviceCodeUrl(): string {
+    return this._accountsUrl.replace(/\/token$/, "/device/code");
+  }
 }

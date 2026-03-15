@@ -6,6 +6,16 @@ import { getLogger } from "../logger/sdk-logger.js";
 
 const EXPIRY_BUFFER_MS = 5000;
 
+export enum OAuthGrantType {
+  REFRESH_TOKEN = "refresh_token",
+  AUTHORIZATION_CODE = "authorization_code",
+  CLIENT_CREDENTIALS = "client_credentials",
+  DEVICE_CODE = "device_code",
+  IMPLICIT = "implicit",
+  ACCESS_TOKEN = "access_token",
+  STORED = "stored",
+}
+
 interface OAuthTokenOptions {
   clientId?: string;
   clientSecret?: string;
@@ -15,6 +25,8 @@ interface OAuthTokenOptions {
   redirectURL?: string;
   id?: string;
   codeVerifier?: string;
+  grantType?: OAuthGrantType;
+  scope?: string;
 }
 
 export class OAuthToken extends Token {
@@ -27,6 +39,8 @@ export class OAuthToken extends Token {
   private _expiresIn: string | null = null;
   private _id: string | null;
   private _codeVerifier: string | null;
+  private _grantType: OAuthGrantType | null;
+  private _scope: string | null;
 
   private _store: TokenStore | null = null;
 
@@ -40,6 +54,8 @@ export class OAuthToken extends Token {
     this._redirectURL = options.redirectURL ?? null;
     this._id = options.id ?? null;
     this._codeVerifier = options.codeVerifier ?? null;
+    this._grantType = options.grantType ?? null;
+    this._scope = options.scope ?? null;
   }
 
   // Getters
@@ -67,6 +83,12 @@ export class OAuthToken extends Token {
   getId(): string | null {
     return this._id;
   }
+  override getGrantType(): string | null {
+    return this._grantType;
+  }
+  override getScope(): string | null {
+    return this._scope;
+  }
 
   // Setters
   setId(id: string | null): void {
@@ -84,12 +106,42 @@ export class OAuthToken extends Token {
   setStore(store: TokenStore): void {
     this._store = store;
   }
+  setGrantType(grantType: OAuthGrantType | null): void {
+    this._grantType = grantType;
+  }
+  setScope(scope: string | null): void {
+    this._scope = scope;
+  }
 
   /**
    * Authenticate and return the access token string.
    */
   async authenticate(environment: Environment): Promise<string> {
     const logger = getLogger();
+
+    // Implicit and direct access token flows cannot refresh — return or throw
+    if (
+      this._grantType === OAuthGrantType.IMPLICIT ||
+      this._grantType === OAuthGrantType.ACCESS_TOKEN
+    ) {
+      if (this._accessToken && this._expiresIn) {
+        const expiryTime = parseInt(this._expiresIn, 10);
+        if (Date.now() < expiryTime - EXPIRY_BUFFER_MS) {
+          return this._accessToken;
+        }
+        throw new SDKException(
+          "TOKEN_ERROR",
+          "Access token has expired and cannot be refreshed for this grant type.",
+        );
+      }
+      if (this._accessToken) {
+        return this._accessToken;
+      }
+      throw new SDKException(
+        "TOKEN_ERROR",
+        "No access token available.",
+      );
+    }
 
     // Check if we have a valid token from the store
     if (this._store) {
@@ -110,6 +162,16 @@ export class OAuthToken extends Token {
         logger.debug("Using existing access token (not expired).");
         return this._accessToken;
       }
+    }
+
+    // Client credentials — re-request (no refresh token involved)
+    if (this._grantType === OAuthGrantType.CLIENT_CREDENTIALS) {
+      logger.info("Requesting access token via client_credentials grant...");
+      await this.clientCredentialsAccessToken(environment);
+      if (!this._accessToken) {
+        throw new SDKException("TOKEN_ERROR", "Failed to obtain access token.");
+      }
+      return this._accessToken;
     }
 
     // Need to refresh or generate
@@ -150,24 +212,23 @@ export class OAuthToken extends Token {
   }
 
   /**
-   * Revoke the refresh token via Zoho's revoke endpoint.
+   * Revoke the token via Zoho's revoke endpoint.
+   * Revokes the refresh token if available, otherwise the access token.
    */
   async revoke(environment: Environment): Promise<void> {
-    const refreshToken = this._refreshToken;
-    if (!refreshToken) {
+    const tokenToRevoke = this._refreshToken || this._accessToken;
+    if (!tokenToRevoke) {
       throw new SDKException(
         "TOKEN_REVOKE_ERROR",
-        "No refresh token available to revoke.",
+        "No token available to revoke.",
       );
     }
 
     const accountsUrl = environment.getAccountsUrl();
-    // accounts URL is e.g. https://accounts.zoho.com/oauth/v2/token
-    // revoke endpoint is https://accounts.zoho.com/oauth/v2/token/revoke
     const revokeUrl = accountsUrl.replace(/\/token$/, "/token/revoke");
 
     const params = new URLSearchParams({
-      token: refreshToken,
+      token: tokenToRevoke,
     });
 
     try {
@@ -201,6 +262,59 @@ export class OAuthToken extends Token {
       throw new SDKException(
         "TOKEN_REVOKE_ERROR",
         "Error revoking token.",
+        null,
+        err instanceof Error ? err : null,
+      );
+    }
+  }
+
+  /**
+   * Request access token using client_credentials grant.
+   */
+  private async clientCredentialsAccessToken(environment: Environment): Promise<void> {
+    const logger = getLogger();
+    const accountsUrl = environment.getAccountsUrl();
+
+    const params = new URLSearchParams({
+      client_id: this._clientId || "",
+      client_secret: this._clientSecret || "",
+      grant_type: "client_credentials",
+      scope: this._scope || "",
+    });
+
+    try {
+      const response = await fetch(accountsUrl, {
+        method: "POST",
+        body: params,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
+
+      const data = (await response.json()) as Record<string, unknown>;
+
+      if (data.error) {
+        throw new SDKException(
+          "TOKEN_ERROR",
+          `Client credentials token request failed: ${data.error as string}`,
+          data,
+        );
+      }
+
+      this._accessToken = data.access_token as string;
+      const expiresInSec = data.expires_in as number;
+      this._expiresIn = String(Date.now() + expiresInSec * 1000);
+
+      logger.info("Access token obtained via client_credentials grant.");
+
+      if (this._store) {
+        await this._store.saveToken(this);
+      }
+    } catch (err) {
+      if (err instanceof SDKException) throw err;
+      throw new SDKException(
+        "TOKEN_ERROR",
+        "Error requesting client credentials access token.",
         null,
         err instanceof Error ? err : null,
       );

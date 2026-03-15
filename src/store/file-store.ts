@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import type { TokenStore } from "./token-store.js";
 import type { Token } from "../auth/token.js";
-import { OAuthToken } from "../auth/oauth-token.js";
+import { OAuthToken, OAuthGrantType } from "../auth/oauth-token.js";
 import { SDKException } from "../exception/sdk-exception.js";
 
 const HEADERS = [
@@ -14,6 +14,8 @@ const HEADERS = [
   "grant_token",
   "expiry_time",
   "redirect_url",
+  "grant_type",
+  "scope",
 ];
 
 /**
@@ -68,6 +70,8 @@ export class FileStore implements TokenStore {
       accessToken: row[4] || undefined,
       grantToken: row[5] || undefined,
       redirectURL: row[7] || undefined,
+      grantType: (row[8] as OAuthGrantType) || undefined,
+      scope: row[9] || undefined,
     });
     token.setId(row[0] || null);
     token.setExpiresIn(row[6] || null);
@@ -82,8 +86,13 @@ export class FileStore implements TokenStore {
         const clientId = token.getClientId();
         const grantToken = token.getGrantToken();
         const refreshToken = token.getRefreshToken();
+        const grantType = token.getGrantType();
 
         if (clientId && row[1] === clientId) {
+          // Client credentials tokens match by clientId + grantType
+          if (grantType === OAuthGrantType.CLIENT_CREDENTIALS && row[8] === OAuthGrantType.CLIENT_CREDENTIALS) {
+            return this.rowToToken(row);
+          }
           if (grantToken && row[5] === grantToken) {
             return this.rowToToken(row);
           }
@@ -137,6 +146,8 @@ export class FileStore implements TokenStore {
           token.getGrantToken() || "",
           token.getExpiresIn() || "",
           token.getRedirectURL() || "",
+          token.getGrantType() || "",
+          token.getScope() || "",
         ];
 
         if (!token.getId()) {

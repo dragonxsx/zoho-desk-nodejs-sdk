@@ -22,4 +22,11 @@ export abstract class Token {
   abstract getGrantToken(): string | null;
   abstract getExpiresIn(): string | null;
   abstract getRedirectURL(): string | null;
+
+  getGrantType(): string | null {
+    return null;
+  }
+  getScope(): string | null {
+    return null;
+  }
 }

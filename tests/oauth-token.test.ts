@@ -19,10 +19,10 @@ describe("OAuthToken.revoke", () => {
     fetchSpy.mockRestore();
   });
 
-  it("throws if no refresh token is available", async () => {
-    const token = new OAuthToken({ accessToken: "atoken" });
+  it("throws if no token is available to revoke", async () => {
+    const token = new OAuthToken({});
     await expect(token.revoke(env)).rejects.toThrow(SDKException);
-    await expect(token.revoke(env)).rejects.toThrow("No refresh token");
+    await expect(token.revoke(env)).rejects.toThrow("No token available to revoke");
   });
 
   it("calls the correct revoke URL", async () => {

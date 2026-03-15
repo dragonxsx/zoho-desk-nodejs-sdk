@@ -1,6 +1,6 @@
 // Auth
 export { Token } from "./auth/token.js";
-export { OAuthToken } from "./auth/oauth-token.js";
+export { OAuthToken, OAuthGrantType } from "./auth/oauth-token.js";
 export { OAuthBuilder } from "./auth/oauth-builder.js";
 export { ZohoAuthenticationProvider } from "./auth/zoho-auth-provider.js";
 export {
@@ -9,6 +9,9 @@ export {
   generatePKCEPair,
 } from "./auth/pkce.js";
 export type { PKCEPair } from "./auth/pkce.js";
+export { AuthorizationUrlBuilder, parseImplicitFragment } from "./auth/authorization-url.js";
+export { requestDeviceCode, pollForDeviceToken } from "./auth/device-auth.js";
+export type { DeviceCodeResponse, DeviceAuthOptions } from "./auth/device-auth.js";
 
 // Data Centers
 export { Environment } from "./dc/environment.js";

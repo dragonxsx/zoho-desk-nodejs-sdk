@@ -1,4 +1,4 @@
-import { OAuthToken } from "./oauth-token.js";
+import { OAuthToken, OAuthGrantType } from "./oauth-token.js";
 import { SDKException } from "../exception/sdk-exception.js";
 
 export class OAuthBuilder {
@@ -10,6 +10,8 @@ export class OAuthBuilder {
   private _redirectURL: string | null = null;
   private _id: string | null = null;
   private _codeVerifier: string | null = null;
+  private _grantType: OAuthGrantType | null = null;
+  private _scope: string | null = null;
 
   clientId(clientId: string): this {
     this._clientId = clientId;
@@ -51,7 +53,41 @@ export class OAuthBuilder {
     return this;
   }
 
+  scope(scope: string): this {
+    this._scope = scope;
+    return this;
+  }
+
+  clientCredentials(): this {
+    this._grantType = OAuthGrantType.CLIENT_CREDENTIALS;
+    return this;
+  }
+
   build(): OAuthToken {
+    // Client credentials validation
+    if (this._grantType === OAuthGrantType.CLIENT_CREDENTIALS) {
+      if (!this._clientId || !this._clientSecret) {
+        throw new SDKException(
+          "MANDATORY_VALUE_ERROR",
+          "clientId and clientSecret are required for client_credentials grant.",
+        );
+      }
+      if (!this._scope) {
+        throw new SDKException(
+          "MANDATORY_VALUE_ERROR",
+          "scope is required for client_credentials grant.",
+        );
+      }
+      return new OAuthToken({
+        clientId: this._clientId,
+        clientSecret: this._clientSecret,
+        id: this._id ?? undefined,
+        grantType: OAuthGrantType.CLIENT_CREDENTIALS,
+        scope: this._scope,
+      });
+    }
+
+    // Existing validation
     if (!this._grantToken && !this._refreshToken && !this._accessToken && !this._id) {
       throw new SDKException(
         "MANDATORY_VALUE_ERROR",
@@ -75,6 +111,7 @@ export class OAuthBuilder {
       redirectURL: this._redirectURL ?? undefined,
       id: this._id ?? undefined,
       codeVerifier: this._codeVerifier ?? undefined,
+      scope: this._scope ?? undefined,
     });
   }
 }
