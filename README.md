@@ -21,11 +21,16 @@ This SDK is built on four core principles:
 
 ## Features
 
-- **128+ API modules** auto-generated from official Zoho Desk OpenAPI specs
-- **OAuth 2.0** with 4 grant types: refresh token, authorization code, direct access token, and stored token
+- **126 API modules** auto-generated from official Zoho Desk OpenAPI specs
+- **OAuth 2.0** with 7 grant types: refresh token, authorization code, client credentials, device code, implicit, direct access token, and stored token
+- **PKCE support** (RFC 7636) for secure public client flows
+- **Authorization URL builder** for constructing OAuth consent screens
+- **Device authorization flow** for headless/IoT devices
 - **Automatic token refresh** with 5-second expiry buffer
 - **7-region data center support** — US, EU, IN, AU, CA, CN, JP
 - **Pluggable token persistence** with built-in CSV file store
+- **Structured error handling** with `ZohoApiError` and `SDKException`
+- **Automatic retry** with configurable max retries and delay
 - **HTTP proxy support** via undici ProxyAgent
 - **Configurable logging** powered by Winston
 - **Lazy-loaded API clients** for minimal startup overhead
@@ -71,7 +76,7 @@ const tickets = await client.tickets.get();
 
 ## Authentication
 
-The SDK supports four OAuth grant types through `OAuthBuilder`:
+The SDK supports seven OAuth grant types through `OAuthBuilder`:
 
 ### Refresh Token
 
@@ -108,6 +113,20 @@ const token = new OAuthBuilder()
   .build();
 ```
 
+### Client Credentials
+
+For server-to-server applications without user context.
+
+```typescript
+const token = new OAuthBuilder()
+  .clientId("your-client-id")
+  .clientSecret("your-client-secret")
+  .scope("Desk.tickets.ALL")
+  .orgId("your-org-id")
+  .clientCredentials()
+  .build();
+```
+
 ### Stored Token by ID
 
 For resuming a previously persisted token session.
@@ -116,6 +135,105 @@ For resuming a previously persisted token session.
 const token = new OAuthBuilder()
   .id("stored-token-id")
   .build();
+```
+
+### Authorization URL Builder
+
+Build OAuth authorization URLs for redirecting users to the Zoho consent screen.
+
+```typescript
+import { AuthorizationUrlBuilder, USDataCenter } from "@banana.inc/zoho-desk-nodejs-sdk";
+
+const authUrl = new AuthorizationUrlBuilder()
+  .clientId("your-client-id")
+  .scope("Desk.tickets.ALL")
+  .redirectUri("https://your-app.com/callback")
+  .responseType("code")     // "code" (default) or "token" for implicit flow
+  .accessType("offline")    // "offline" (default) or "online"
+  .state("csrf-token")      // optional CSRF protection
+  .prompt("consent")        // optional
+  .build(USDataCenter.PRODUCTION());
+```
+
+### PKCE (Proof Key for Code Exchange)
+
+Secure authorization code flows for public clients (RFC 7636).
+
+```typescript
+import {
+  generatePKCEPair,
+  AuthorizationUrlBuilder,
+  OAuthBuilder,
+  USDataCenter,
+} from "@banana.inc/zoho-desk-nodejs-sdk";
+
+// Generate a PKCE pair
+const pkce = await generatePKCEPair();
+
+// Include in authorization URL
+const authUrl = new AuthorizationUrlBuilder()
+  .clientId("your-client-id")
+  .scope("Desk.tickets.ALL")
+  .redirectUri("https://your-app.com/callback")
+  .pkce(pkce)
+  .build(USDataCenter.PRODUCTION());
+
+// Exchange the code with the verifier
+const token = new OAuthBuilder()
+  .clientId("your-client-id")
+  .clientSecret("your-client-secret")
+  .grantToken("authorization-code-from-callback")
+  .redirectURL("https://your-app.com/callback")
+  .codeVerifier(pkce.codeVerifier)
+  .build();
+```
+
+### Device Authorization (Device Flow)
+
+For devices without a browser (IoT, CLI tools, smart TVs).
+
+```typescript
+import {
+  requestDeviceCode,
+  pollForDeviceToken,
+  USDataCenter,
+} from "@banana.inc/zoho-desk-nodejs-sdk";
+
+// Step 1: Request a device code
+const deviceCode = await requestDeviceCode(
+  USDataCenter.PRODUCTION(),
+  "your-client-id",
+  "Desk.tickets.ALL",
+);
+
+// Step 2: Show the user where to authorize
+console.log(`Visit ${deviceCode.verification_url} and enter code: ${deviceCode.user_code}`);
+
+// Step 3: Poll until the user authorizes (supports cancellation)
+const controller = new AbortController();
+const token = await pollForDeviceToken(
+  USDataCenter.PRODUCTION(),
+  deviceCode,
+  {
+    clientId: "your-client-id",
+    clientSecret: "your-client-secret",
+    signal: controller.signal,
+    onPoll: (status) => console.log(`Status: ${status}`),
+  },
+);
+```
+
+### Implicit Flow
+
+Parse tokens from URL fragments after an implicit OAuth redirect.
+
+```typescript
+import { parseImplicitFragment } from "@banana.inc/zoho-desk-nodejs-sdk";
+
+// Build the authorization URL with responseType("token") first,
+// then parse the redirect fragment:
+const fragment = "access_token=1000.abc...&expires_in=3600&token_type=Bearer";
+const token = parseImplicitFragment(fragment);
 ```
 
 ## Data Centers
@@ -144,7 +262,9 @@ import { SDKConfigBuilder } from "@banana.inc/zoho-desk-nodejs-sdk";
 const config = new SDKConfigBuilder()
   .autoRefreshFields(true)
   .pickListValidation(true)
-  .timeout(30000) // request timeout in ms
+  .timeout(30000)    // request timeout in ms
+  .maxRetries(5)     // 0–10, default 3
+  .retryDelay(10)    // seconds, 0–180, default 3
   .build();
 
 await new InitializeBuilder()
@@ -221,9 +341,52 @@ class DatabaseStore implements TokenStore {
 }
 ```
 
+## Error Handling
+
+The SDK provides two structured error types:
+
+### ZohoApiError
+
+Thrown when the Zoho Desk API returns a non-2xx response. Contains the HTTP status, Zoho error code, response body, and request URL.
+
+```typescript
+import { ZohoApiError } from "@banana.inc/zoho-desk-nodejs-sdk";
+
+try {
+  const tickets = await client.tickets.get();
+} catch (err) {
+  if (err instanceof ZohoApiError) {
+    console.log(err.responseStatusCode); // e.g. 403
+    console.log(err.errorCode);          // e.g. "INVALID_OAUTH"
+    console.log(err.message);            // Human-readable message
+    console.log(err.requestUrl);         // The URL that was called
+    console.log(err.responseBody);       // Full parsed JSON body
+  }
+}
+```
+
+### SDKException
+
+Thrown for SDK-level errors (invalid configuration, missing parameters, etc.).
+
+```typescript
+import { SDKException } from "@banana.inc/zoho-desk-nodejs-sdk";
+
+try {
+  await new InitializeBuilder().initialize();
+} catch (err) {
+  if (err instanceof SDKException) {
+    console.log(err.code);    // e.g. "MANDATORY_VALUE_ERROR"
+    console.log(err.message);
+    console.log(err.details); // Optional structured details
+    console.log(err.cause);   // Optional root cause Error
+  }
+}
+```
+
 ## Code Generation Pipeline
 
-The SDK's 128+ API modules are generated from Zoho's official OpenAPI specifications through a four-stage pipeline:
+The SDK's 126 API modules are generated from Zoho's official OpenAPI specifications through a four-stage pipeline:
 
 ```
 Pull OAS specs ──> Bundle per module ──> Kiota generate ──> Generate facade
