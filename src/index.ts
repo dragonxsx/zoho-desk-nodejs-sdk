@@ -55,6 +55,9 @@ export { InitializeBuilder } from "./initializer/initialize-builder.js";
 // Generated facade client
 export { ZohoDeskClient } from "./client/zoho-desk-client.js";
 
+// Kiota utilities (re-exported for consumers needing multipart uploads)
+export { MultipartBody, serializeMultipartBody } from "@microsoft/kiota-abstractions";
+
 // Factory
 import { Initializer } from "./initializer/initializer.js";
 import { ZohoDeskClient } from "./client/zoho-desk-client.js";
