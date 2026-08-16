@@ -1,0 +1,114 @@
+---
+type: Concept
+title: Facade Client — ZohoDeskClient
+description: "The unified facade that wraps all 126 Kiota-generated API modules with lazy instantiation. Explains the pattern, how getters work, and how to regenerate."
+tags: [facade, client, zoho-desk-client]
+---
+
+# Facade Client — ZohoDeskClient
+
+`ZohoDeskClient` is the unified entry point for all Zoho Desk API operations. It wraps 126 generated API client modules using a lazy getter pattern, so modules are only instantiated on first access.
+
+## Overview
+
+The class is **auto-generated** by `scripts/generate-facade.ts` and carries a DO NOT EDIT header (line 3):
+
+```typescript
+/**
+ * Auto-generated facade wrapping all per-module Kiota API clients.
+ * DO NOT EDIT — regenerate with: npx tsx scripts/generate-facade.ts
+ */
+```
+
+## Lazy Getter Pattern
+
+Each of the 126 modules follows this pattern:
+
+```typescript
+export class ZohoDeskClient {
+  private readonly adapter: RequestAdapter;
+
+  // Private backing field
+  private _ticket?: TicketApiClient;
+
+  // Lazy getter
+  get ticket(): TicketApiClient {
+    if (!this._ticket) {
+      this._ticket = createTicketApiClient(this.adapter);
+    }
+    return this._ticket;
+  }
+}
+```
+
+The shared `RequestAdapter` (which connects to the request pipeline) is passed to every factory function. This means:
+- **Module instantiation cost is deferred** until the first call to that specific API area
+- **All modules share** the same auth, middleware, and configuration
+- **Module instances are cached** for the lifetime of the client
+
+## All 126 Module Getters
+
+The getters cover every Zoho Desk API module. Key API areas include:
+
+| Category | Modules |
+|---|---|
+| **Tickets** | `ticket`, `ticketAttachment`, `ticketComment`, `ticketApprovals`, `ticketCount`, `ticketFollowers`, `ticketTag`, `ticketTemplate`, `ticketTimeEntry`, `ticketTimer` |
+| **Contacts** | `contact`, `contactAttachment`, `contactComments`, `contactDeduplication`, `contactFollowers`, `contactProfile`, `contactTimeEntry` |
+| **Accounts** | `account`, `accountAttachment`, `accountComments`, `accountContactMappingInfo`, `accountDeduplication`, `accountFollowers`, `accountSla`, `accountTimeEntry` |
+| **Agents** | `agent`, `agentPresence`, `agentSignatures`, `agentTimeEntry` |
+| **Knowledge Base** | `article`, `articleAttachment`, `articleComment`, `articleFeedback`, `articleTranslation`, `kbCategory`, `kbCategoryLogo`, `kBRootCategory`, `kBSection` |
+| **Community** | `community`, `communityAttachment`, `communityCategory`, `communityComment`, `communityPreferences`, `communityTopic`, `communityUser` |
+| **IM/Chat** | `iM_Channel`, `iM_Metrics`, `iM_Session`, `iMCannedMessage`, `iMTemplateMessage` |
+| **Tasks** | `task`, `taskAttachment`, `taskComments`, `taskTimeEntry`, `taskTimer` |
+| **Admin** | `department`, `field`, `profile`, `role`, `team`, `businessHour`, `holidayList`, `customView`, `module`, `organization`, `sharingRule`, `routingPreference`, `validationRules`, `validationRuleCriteria`, `layoutRules`, `layoutRuleCriteria` |
+| **Automation** | `automationEngine`, `automationFeatureCount`, `blueprintTransitions`, `entityBlueprints`, `genericAction`, `ruleGroup`, `pendingApproval`, `label` |
+| **Reports** | `dashboardMetrics`, `dashboards`, `reportIntegration`, `customerHappiness` |
+| **Other** | `search`, `upload`, `webhook`, `channel`, `call`, `callComments`, `event`, `eventComments`, `activity`, `backup`, `badge`, `bulkImport`, `contract`, `countriesAndLanguages`, `dependencyMappings`, `displayEntity`, `domainMapping`, `emailFailureAlert`, `emailTemplates`, `finance`, `followers`, `helpcenter`, `helpcenterGroups`, `import`, `licenseFeaturePlan`, `mailReplyAddress`, `permalink`, `pinnedConversation`, `product`, `productAttachment`, `recyclebin`, `skill`, `skillConfiguration`, `skillType`, `subjectAccessRequest`, `supportEmailDomain`, `supportPlan`, `templateFolders`, `thread`, `timeTracking`, `user`, `widget`, `bugInteg`, `sLA` |
+
+To see the exact list of module names, inspect the imports and private fields in `src/client/zoho-desk-client.ts`.
+
+## Regeneration
+
+After modifying `src/generated/` (e.g., running the full codegen pipeline), regenerate the facade:
+
+```bash
+npx tsx scripts/generate-facade.ts
+```
+
+This scans `src/generated/` for `*ApiClient.ts` files, discovers the interface and factory names, and regenerates `src/client/zoho-desk-client.ts`.
+
+## How Consumers Use It
+
+```typescript
+import { createDeskClient } from "@banana.inc/zoho-desk-nodejs-sdk";
+
+// After initialization:
+const client = createDeskClient();
+
+// Use any module by name — all are lazily instantiated
+const tickets = await client.ticket.get();
+const agents = await client.agent.get();
+const article = await client.article.get({ id: 123 });
+```
+
+The factory function `createDeskClient()` (in `src/index.ts`, line 69) retrieves the `Initializer` singleton, creates the adapter, and returns a new `ZohoDeskClient`:
+
+```typescript
+export function createDeskClient(): ZohoDeskClient {
+  const initializer = Initializer.getInitializer();
+  const adapter = initializer.createAdapter();
+  return new ZohoDeskClient(adapter);
+}
+```
+
+## Source References
+
+- `src/client/zoho-desk-client.ts` — generated facade (~1,151 LOC)
+- `scripts/generate-facade.ts` — generation script (~120 LOC)
+- `src/index.ts` — `createDeskClient()` factory (lines 69–73)
+
+## Related Pages
+
+- [Architecture Overview](../architecture/overview.md) — request flow from caller to facade
+- [Codegen Pipeline](../codegen/pipeline.md) — how the facade and modules are generated
+- [Request Pipeline](../http/request-pipeline.md) — how the adapter is created
