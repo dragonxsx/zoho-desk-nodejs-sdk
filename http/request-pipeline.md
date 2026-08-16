@@ -3,6 +3,14 @@ type: Concept
 title: Request Pipeline — HTTP Middleware & Transport
 description: "How the Kiota FetchRequestAdapter is created with Zoho middleware, proxy, and retry configuration. Covers middleware ordering, error translation, and the EmptyQueryParamMiddleware fix."
 tags: [http, middleware, request-pipeline, kiota]
+openwiki:
+  roles: [architecture, integration]
+  change_kinds: [lifecycle, public-api]
+  source_paths: [src/http/zoho-http-client.ts, src/http/zoho-error-middleware.ts, src/http/empty-query-param-middleware.ts]
+  symbols: [createRequestAdapter, ZohoErrorMiddleware, EmptyQueryParamMiddleware]
+  test_paths: [tests/zoho-error-middleware.test.ts, tests/empty-query-param-middleware.test.ts, tests/proxy.test.ts]
+  invariants: ["Middleware array order is EmptyQueryParamMiddleware (first), then ZohoErrorMiddleware, then Kiota defaults with a replaced RetryHandler; the error middleware runs after retry on the response path so 429/503/504 retries happen before translation."]
+  validation_commands: [npx vitest run tests/zoho-error-middleware.test.ts tests/empty-query-param-middleware.test.ts]
 ---
 
 # Request Pipeline — HTTP Middleware & Transport
@@ -120,6 +128,15 @@ This is Node.js-specific (uses `undici` dispatcher). The proxy URL is `http://` 
 ## Custom Fetch
 
 When no proxy is configured, `customFetch` remains `undefined` and Kiota uses its default fetch implementation. When a proxy is configured, the custom fetch wraps every call with the undici dispatcher.
+
+## Change Navigation
+
+When adding a new middleware, the exact ordering matters:
+- In `createRequestAdapter()` (`src/http/zoho-http-client.ts`), Kiota's defaults come first, then `unshift(new ZohoErrorMiddleware())`, then `unshift(new EmptyQueryParamMiddleware())`. A new middleware's position in the array determines both its request-direction order and its response-direction order. If a new middleware must see responses *after* retry (like the error translator), place it closer to the front of the array; if it must clean requests *before* the URL reaches everything else (like the empty-param stripper), it should be the first element.
+- The retry handler replacement is done by finding the existing `RetryHandler` instance in the array and swapping it — a new middleware that also extends/duplicates `RetryHandler` will be found instead (the first match wins).
+- `ZohoErrorMiddleware` and `EmptyQueryParamMiddleware` both throw if `next` is unset; keep them wired only through `createRequestAdapter()` (unit tests stub `next` directly).
+
+Focused tests for middleware changes: `tests/zoho-error-middleware.test.ts`, `tests/empty-query-param-middleware.test.ts`, `tests/proxy.test.ts`. Narrow validation: `npx vitest run tests/zoho-error-middleware.test.ts tests/empty-query-param-middleware.test.ts`.
 
 ## Source References
 

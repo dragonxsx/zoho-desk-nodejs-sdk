@@ -3,6 +3,14 @@ type: Concept
 title: OAuth Grant Flows
 description: "Detailed documentation of all 7 OAuth grant types in the Zoho Desk SDK: refresh token, authorization code, client credentials, device code, implicit, direct access token, and stored token. Includes sequence diagrams."
 tags: [oauth, grant-flows, authentication]
+openwiki:
+  roles: [domain, integration]
+  change_kinds: [lifecycle, public-api]
+  source_paths: [src/auth/oauth-builder.ts, src/auth/authorization-url.ts, src/auth/pkce.ts, src/auth/device-auth.ts]
+  symbols: [OAuthBuilder, AuthorizationUrlBuilder, parseImplicitFragment, generateCodeVerifier, generateCodeChallenge, generatePKCEPair, requestDeviceCode, pollForDeviceToken]
+  test_paths: [tests/authorization-url.test.ts, tests/client-credentials.test.ts, tests/device-auth.test.ts, tests/pkce.test.ts, tests/oauth-builder.test.ts]
+  invariants: ["CLIENT_CREDENTIALS requires clientId, clientSecret, scope, and orgId; device polling handles authorization_pending and slow_down by retrying and +5s backoff until expires_in elapses; PKCE challenge is SHA-256 base64url."]
+  validation_commands: [npx vitest run tests/authorization-url.test.ts tests/client-credentials.test.ts tests/device-auth.test.ts tests/pkce.test.ts tests/oauth-builder.test.ts]
 ---
 
 # OAuth Grant Flows
@@ -16,7 +24,7 @@ The SDK supports 7 OAuth grant types through `OAuthBuilder` and dedicated auth m
 | `REFRESH_TOKEN` | `.refreshToken("...")` | clientId, clientSecret, refreshToken | Server-side long-lived access |
 | `AUTHORIZATION_CODE` | `.grantToken("...")` | clientId, clientSecret, grantToken, redirectURL, (codeVerifier) | Web app OAuth callback |
 | `CLIENT_CREDENTIALS` | `.clientCredentials()` | clientId, clientSecret, scope, orgId | Server-to-server |
-| `DEVICE_CODE` | N/A (dedicated functions) | clientId, clientSecret, scope | Headless/IoT devices |
+| `DEVICE_CODE` | N/A (dedicated `requestDeviceCode()` / `pollForDeviceToken()`) | clientId, clientSecret, scope | Headless/IoT devices |
 | `IMPLICIT` | `.build()` + `parseImplicitFragment()` | accessToken, expiresIn | Legacy browser apps |
 | `ACCESS_TOKEN` | `.accessToken("...")` | accessToken | Quick testing |
 | `STORED` | `.id("...")` | id, store | Resuming persisted session |
@@ -162,7 +170,7 @@ sequenceDiagram
 - **OAuthBuilder** — `src/auth/oauth-builder.ts` (130 LOC). Validates required fields per grant type in `build()`.
 - **AuthorizationUrlBuilder** — `src/auth/authorization-url.ts` (100 LOC). Builds OAuth consent URLs. Supports PKCE via `.pkce()`.
 - **PKCE** — `src/auth/pkce.ts` (52 LOC). `generateCodeVerifier()`, `generateCodeChallenge()`, `generatePKCEPair()` using `node:crypto`.
-- **Device Auth** — `src/auth/device-auth.ts` (200 LOC). `requestDeviceCode()` and `pollForDeviceToken()` with AbortSignal support.
+- **Device Auth** — `src/auth/device-auth.ts` (210 LOC). `requestDeviceCode()` and `pollForDeviceToken()` with AbortSignal support.
 - **Authorization URL parsing** — `src/auth/authorization-url.ts` also exports `parseImplicitFragment()` for extracting tokens from `#` fragments.
 
 ## Key Contracts and Invariants
@@ -173,9 +181,12 @@ sequenceDiagram
 - **At least one of**: grantToken, refreshToken, accessToken, or id must be provided
 
 ### Device Auth Polling (`pollForDeviceToken`)
-- Handles `authorization_pending` (retry), `slow_down` (increase interval), `expired_token` (throw), `access_denied` (throw)
-- Supports `AbortSignal` for cancellation
-- Respects the `expires_in` window from the device code response
+- Polls `POST {accountsUrl}` (the Zoho accounts token endpoint) with `grant_type=device_code` and `code=device_code`, at an interval taken from the device-code response (default 5s)
+- Handles `authorization_pending` (retry), `slow_down` (increase interval by 5s and notify `onPoll("slow_down")`), `expired_token` (throw), `access_denied` (throw)
+- Supports `AbortSignal` for cancellation, checked both before and after the sleep
+- `onPoll` callback receives status updates (`"authorization_pending"`, `"slow_down"`, `"success"`)
+- Respects the `expires_in` window from the device-code response; throws `DEVICE_AUTH_ERROR` if the window elapses without success
+- `requestDeviceCode` posts to `environment.getDeviceCodeUrl()` (derived from the accounts URL by replacing `/token` with `/device/code`) and accepts `verification_uri` as a fallback for `verification_url`
 
 ### PKCE
 - Code verifier: 43–128 URL-safe characters, `node:crypto.randomBytes`

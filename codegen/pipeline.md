@@ -3,6 +3,14 @@ type: Concept
 title: Code Generation Pipeline
 description: "How the SDK's generated code is produced from Zoho's OpenAPI specs: pulling specs, bundling OAS files, running Kiota via Docker, and generating the facade."
 tags: [codegen, kiota, openapi, generation]
+openwiki:
+  roles: [architecture, operations]
+  change_kinds: [codegen, lifecycle]
+  source_paths: [scripts/pull-and-generate.sh, scripts/bundle-oas.ts, scripts/oas-utils.ts, scripts/generate-clients.sh, scripts/generate-facade.ts]
+  symbols: [bundleOAS, normalizePathKey, buildParamNameMapping, remapParameterNames, stripFormatFromUnionTypes, discoverModules, generateFacade]
+  test_paths: [tests/bundle-oas.test.ts, tests/oas-utils.test.ts]
+  invariants: ["Component-only OAS files are skipped; every bundled spec inlines external $refs and gets the iam-oauth2-schema security scheme; Kiota output is post-processed with @ts-nocheck and delete->_delete renames."]
+  validation_commands: [npx vitest run tests/bundle-oas.test.ts tests/oas-utils.test.ts]
 ---
 
 # Code Generation Pipeline
@@ -54,14 +62,17 @@ npm run generate
 
 Key functions:
 - `loadDocRegistry()` — loads all `.json` files from the input directory
-- `resolveExternalRefs()` — traverses each doc and replaces external `$ref` pointers with actual schema content
-- `buildParamNameMapping()` — handles parameter name collisions across endpoint definitions
-- `remapParameterNames()` — renames parameters to avoid Kiota conflicts
-- `stripFormatFromUnionTypes()` — removes `format` from union schemas (Kiota compatibility)
+- `resolveRefs()` / `resolveRef()` — resolve external `./File.json#/components/...` refs, inlining referenced components and rewriting them to local refs
+- `inlineComponent()` / `ensureComponentInlined()` — deep-clone a component from a source file into the target bundle, recursively resolving its refs; cycle-safe via a `visited` set
+- `bundleSpec()` — also ensures `iam-oauth2-schema` security scheme, a `security` array, a default `servers` entry, and runs intra-file path normalization plus `stripFormatFromUnionTypes()`
+- `normalizeIntraFilePaths()` — merges duplicate path signatures whose parameter names differ, into the first-seen canonical path
+- `hasApiPaths()` — component-only files (e.g. `Common.json`) are skipped and produce no output
 - Generates `manifest.json` listing all specs with `{filename, moduleName, clientClassName, pathCount, schemaCount}`
 
 OAS utilities are in `scripts/oas-utils.ts`:
 - `normalizePathKey()` — replaces `{param}` with `{*}` for deduplication
+- `buildParamNameMapping()` / `remapParameterNames()` — build and apply a positional mapping from differing path-parameter names to the canonical name (used by `normalizeIntraFilePaths`)
+- `stripFormatFromUnionTypes()` — removes `format` from schemas whose `type` is a union of `integer`/`number` with `string` (Kiota serialization fix)
 - `HTTP_METHODS` — set of supported HTTP methods
 - `COMPONENT_TYPES` — `schemas`, `responses`, `parameters`, `requestBodies`, `securitySchemes`
 
@@ -89,7 +100,11 @@ docker run --rm \
   -o "/workspace/src/generated/${moduleName}/"
 ```
 
-**Error handling:** Background watchdog kills containers that exceed the timeout. Success/failure counts are tracked via temp files.
+**Error handling:** Background watchdog kills containers that exceed the timeout. Success/failure counts are tracked via temp files; failed module names are collected and the script exits non-zero if any module failed, with per-module Kiota output left in `src/generated/<module>/.kiota.log`.
+
+**Post-processing (`generate-clients.sh` lines 111–132):** after generation the script repairs two Kiota TypeScript issues:
+1. Adds `// @ts-nocheck` to every generated `.ts` file (Kiota emits code that trips TS strict-mode checks).
+2. Renames the reserved word `delete` used as a parameter name to `_delete` across generated files (Kiota bug workaround).
 
 ## Step 4: Generate Facade (generate-facade.ts)
 
@@ -129,9 +144,9 @@ The factory function handles:
 
 - `scripts/pull-and-generate.sh` — full pipeline (38 lines)
 - `scripts/bundle-oas.ts` — OAS bundling (300+ LOC)
-- `scripts/oas-utils.ts` — shared OAS utilities (150+ LOC)
-- `scripts/generate-clients.sh` — Kiota parallel generation (95 lines)
-- `scripts/generate-facade.ts` — facade generation (120 LOC)
+- `scripts/oas-utils.ts` — shared OAS utilities (140 lines)
+- `scripts/generate-clients.sh` — Kiota parallel generation (~139 lines incl. post-processing)
+- `scripts/generate-facade.ts` — facade generation (148 lines)
 - `src/generated/widget/` — exemplar generated module
 
 ## Related Tests

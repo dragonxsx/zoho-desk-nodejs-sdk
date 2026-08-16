@@ -230,7 +230,7 @@ const client = createDeskClient();
 - `src/initializer/initializer.ts` — singleton (129 LOC)
 - `src/config/sdk-config.ts` — config model (41 LOC)
 - `src/config/sdk-config-builder.ts` — config builder (44 LOC)
-- `src/logger/logger.ts` — logger model (31 lines)
+- `src/logger/logger.ts` — logger model (26 lines)
 - `src/logger/log-builder.ts` — logger builder (20 lines)
 - `src/logger/sdk-logger.ts` — Winston integration (29 lines)
 - `src/proxy/request-proxy.ts` — proxy model (34 lines)

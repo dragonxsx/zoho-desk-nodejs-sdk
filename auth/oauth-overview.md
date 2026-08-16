@@ -3,6 +3,14 @@ type: Concept
 title: OAuth Overview — Token Lifecycle
 description: "How OAuth tokens are acquired, cached, refreshed, persisted, and revoked in the Zoho Desk SDK. Covers the authenticate flow, token hierarchy, and ZohoAuthenticationProvider."
 tags: [oauth, authentication, token-lifecycle]
+openwiki:
+  roles: [architecture, domain]
+  change_kinds: [lifecycle, public-api]
+  source_paths: [src/auth/oauth-token.ts, src/auth/token.ts, src/auth/zoho-auth-provider.ts, src/auth/oauth-builder.ts]
+  symbols: [OAuthToken, Token, OAuthGrantType, ZohoAuthenticationProvider, OAuthBuilder]
+  test_paths: [tests/oauth-token.test.ts, tests/client-credentials.test.ts, tests/oauth-builder.test.ts]
+  invariants: ["authenticate() re-checks the store and the 5s expiry buffer on every call; IMPLICIT and ACCESS_TOKEN grants cannot refresh; revoke() POSTs to the /token/revoke URL derived from the accounts URL."]
+  validation_commands: [npx vitest run tests/oauth-token.test.ts tests/oauth-builder.test.ts]
 ---
 
 # OAuth Overview — Token Lifecycle
@@ -124,15 +132,17 @@ Key details:
 
 `OAuthToken.revoke()` (`src/auth/oauth-token.ts`, lines 227–278):
 
-1. Sends `POST` to `{accountsUrl}/revoke` with the refresh token (or access token fallback)
-2. On success, clears local token state (`accessToken`, `refreshToken`, `expiresIn` all set to `null`)
-3. Calls `this.remove()` to delete from the store
-4. Throws `SDKException` with code `TOKEN_REVOKE_ERROR` on failure
+1. Picks the refresh token if present, otherwise the access token; throws `TOKEN_REVOKE_ERROR` if neither exists
+2. Derives the revoke URL by replacing the `/token` suffix of the accounts URL with `/token/revoke` (e.g. `https://accounts.zoho.com/oauth/v2/token` → `.../oauth/v2/token/revoke`) and `POST`s the token as a form-encoded `token` parameter
+3. On success, clears local token state (`accessToken`, `refreshToken`, `expiresIn` all set to `null`)
+4. Calls `this.remove()` to delete from the store
+5. Throws `SDKException` with code `TOKEN_REVOKE_ERROR` on failure
 
-Test evidence (`tests/oauth-token.test.ts`):
+Test evidence (`tests/oauth-token.test.ts` + `tests/client-credentials.test.ts`):
 - Correct revoke URL derivation per data center
 - Clear token state on success
 - Throw on missing token or error response
+- Client-credentials tokens (access token only) revoke the access token when no refresh token exists
 
 ## Token Expiry Buffer
 
@@ -140,17 +150,18 @@ A 5-second buffer (`EXPIRY_BUFFER_MS = 5000`) is subtracted from the expiry time
 
 ## Source References
 
-- `src/auth/token.ts` — abstract base (35 lines)
+- `src/auth/token.ts` — abstract base (36 lines: `authenticate`, `generateToken`, `remove`, `revoke` default, `getId`, plus getters)
 - `src/auth/oauth-token.ts` — `authenticate()` (lines 128–208), `refreshAccessToken()` (lines 340–393), `generateAccessToken()` (lines 398–456), `clientCredentialsAccessToken()` (lines 283–335), `revoke()` (lines 227–278)
-- `src/auth/zoho-auth-provider.ts` — Kiota adapter (25 lines)
-- `src/auth/oauth-builder.ts` — `build()` validation per grant type
+- `src/auth/zoho-auth-provider.ts` — Kiota adapter (24 lines)
+- `src/auth/oauth-builder.ts` — `build()` validation per grant type (130 lines)
 
 ## Related Tests
 
 - `tests/oauth-token.test.ts` — `revoke()` flow, URL derivation, state clearing
-- `tests/client-credentials.test.ts` — `client_credentials` grant builder validation and token request (including `soid` parameter)
+- `tests/client-credentials.test.ts` — `client_credentials` grant builder validation, token request (including `soid` parameter), access-token-only revocation
 - `tests/oauth-builder.test.ts` — builder validation for various grant combinations
 - `tests/authorization-url.test.ts` — authorization URL building
+- `tests/pkce.test.ts` — verifier/challenge generation, RFC 7636 test vector
 
 ### Minimal Validation
 

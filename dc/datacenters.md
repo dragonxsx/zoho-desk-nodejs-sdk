@@ -3,6 +3,14 @@ type: Concept
 title: Data Centers
 description: "7-region data center support: DataCenter abstract class, region-specific subclasses, and the Environment object that resolves accounts and API base URLs."
 tags: [datacenter, environment, url-resolution]
+openwiki:
+  roles: [architecture, domain]
+  change_kinds: [configuration, public-api]
+  source_paths: [src/dc/data-center.ts, src/dc/environment.ts, src/dc/us-data-center.ts, src/dc/eu-data-center.ts, src/dc/in-data-center.ts, src/dc/au-data-center.ts, src/dc/ca-data-center.ts, src/dc/cn-data-center.ts, src/dc/jp-data-center.ts]
+  symbols: [DataCenter, Environment, USDataCenter, EUDataCenter, INDataCenter, AUDataCenter, CADataCenter, CNDataCenter, JPDataCenter]
+  test_paths: [tests/data-centers.test.ts]
+  invariants: ["PRODUCTION() is a cached singleton per region; authorization and device-code URLs are derived from the accounts URL by swapping /token for /auth and /device/code."]
+  validation_commands: [npx vitest run tests/data-centers.test.ts]
 ---
 
 # Data Centers
@@ -41,9 +49,9 @@ abstract class DataCenter {
 | US | `USDataCenter` | `https://desk.zoho.com` | `https://accounts.zoho.com/oauth/v2/token` | `USDataCenter.PRODUCTION()` |
 | EU | `EUDataCenter` | `https://desk.zoho.eu` | `https://accounts.zoho.eu/oauth/v2/token` | `EUDataCenter.PRODUCTION()` |
 | IN | `INDataCenter` | `https://desk.zoho.in` | `https://accounts.zoho.in/oauth/v2/token` | `INDataCenter.PRODUCTION()` |
-| AU | `AUDataCenter` | `https://desk.zoho.au` | `https://accounts.zoho.au/oauth/v2/token` | `AUDataCenter.PRODUCTION()` |
+| AU | `AUDataCenter` | `https://desk.zoho.com.au` | `https://accounts.zoho.com.au/oauth/v2/token` | `AUDataCenter.PRODUCTION()` |
 | CA | `CADataCenter` | `https://desk.zoho.ca` | `https://accounts.zoho.ca/oauth/v2/token` | `CADataCenter.PRODUCTION()` |
-| CN | `CNDataCenter` | `https://desk.zoho.cn` | `https://accounts.zoho.cn/oauth/v2/token` | `CNDataCenter.PRODUCTION()` |
+| CN | `CNDataCenter` | `https://desk.zoho.com.cn` | `https://accounts.zoho.com.cn/oauth/v2/token` | `CNDataCenter.PRODUCTION()` |
 | JP | `JPDataCenter` | `https://desk.zoho.jp` | `https://accounts.zoho.jp/oauth/v2/token` | `JPDataCenter.PRODUCTION()` |
 
 ## Environment Object

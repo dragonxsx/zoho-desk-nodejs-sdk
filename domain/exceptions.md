@@ -3,6 +3,13 @@ type: Concept
 title: Exception Handling
 description: "SDK exception hierarchy: SDKException for configuration/initialization/token errors and ZohoApiError for API response errors. Complete error code reference."
 tags: [exceptions, errors, error-handling]
+openwiki:
+  roles: [domain]
+  change_kinds: [public-api]
+  source_paths: [src/exception/sdk-exception.ts, src/exception/zoho-api-error.ts, src/http/zoho-error-middleware.ts]
+  symbols: [SDKException, ZohoApiError]
+  test_paths: [tests/sdk-exception.test.ts, tests/zoho-error-middleware.test.ts]
+  validation_commands: [npx vitest run tests/sdk-exception.test.ts tests/zoho-error-middleware.test.ts]
 ---
 
 # Exception Handling
@@ -41,6 +48,7 @@ override toString(): string {
 | `SDK_UNINITIALIZATION_ERROR` | `Initializer.getInitializer()` | Called `createDeskClient()` without initializing |
 | `TOKEN_ERROR` | `OAuthToken.authenticate()` | Expired non-refreshable token, failed refresh/generation |
 | `TOKEN_REVOKE_ERROR` | `OAuthToken.revoke()` | Revocation request failed |
+| `TOKEN_STORE_ERROR` | `FileStore` (all methods) | CSV read/write failed |
 | `DEVICE_AUTH_ERROR` | `device-auth.ts` | Device code request failure, polling errors, access denied, timeout |
 | `INITIALIZATION_ERROR` (warn) | `Initializer.initialize()` | Eager token generation failed (non-fatal) |
 
@@ -109,6 +117,7 @@ try {
 - `src/exception/sdk-exception.ts` — internal error class (33 lines)
 - `src/exception/zoho-api-error.ts` — API error class (33 lines)
 - `src/http/zoho-error-middleware.ts` — error middleware that throws ZohoApiError (100 lines)
+- `src/store/file-store.ts` — wraps file I/O failures in `SDKException` with `TOKEN_STORE_ERROR`
 
 ## Related Tests
 

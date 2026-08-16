@@ -54,7 +54,7 @@ sequenceDiagram
     I-->>App: FetchRequestAdapter
 
     App->>ZDC: new ZohoDeskClient(adapter)
-    App->>ZDC: client.tickets.get() [first access lazy-creates module]
+    App->>ZDC: client.ticket.get() [first access lazy-creates module]
 ```
 
 ## Request Flow (Caller to Zoho)
