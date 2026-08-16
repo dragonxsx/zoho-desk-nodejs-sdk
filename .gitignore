@@ -9,3 +9,7 @@ combined-oas.json
 tmp-oas/
 bundled-oas/
 *.tgz
+wiki-site/
+.wiki-stage/
+.wiki/
+openwiki/

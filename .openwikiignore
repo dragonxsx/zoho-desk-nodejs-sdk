@@ -1,0 +1,38 @@
+# Scope control for OpenWiki (https://github.com/langchain-ai/openwiki).
+#
+# src/generated/ is 1,267 Kiota-generated files / ~305k LOC / 18 MB across 126
+# modules. Feeding that to the wiki agent is both ruinously expensive and
+# actively unhelpful -- the interesting design lives in the ~3.5k LOC of
+# hand-written code wrapped around it.
+#
+# `widget` (303 LOC, the smallest module) is kept as a representative exemplar
+# so the wiki can describe the generated module *shape* accurately. The other
+# 125 modules are described from the facade getters in
+# src/client/zoho-desk-client.ts and from scripts/generate-facade.ts.
+#
+# Note: the pattern must be `src/generated/*`, not `src/generated/`. Under
+# gitignore semantics a path cannot be re-included once its parent directory is
+# excluded, so excluding the children individually is what makes the `!` work.
+src/generated/*
+!src/generated/widget/
+
+# Build output and vendored/generated artifacts
+dist/
+node_modules/
+package-lock.json
+bundled-oas/
+tmp-oas/
+combined-oas.json
+*.tsbuildinfo
+*.tgz
+
+# Local runtime state -- may contain real credentials
+.env
+.env.*
+tokens.csv
+sdk.log
+
+# Our own wiki publishing artifacts
+wiki-site/
+.wiki-stage/
+.wiki/

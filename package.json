@@ -18,6 +18,9 @@
     "generate": "bash scripts/pull-and-generate.sh",
     "bundle-oas": "tsx scripts/bundle-oas.ts",
     "generate-facade": "tsx scripts/generate-facade.ts",
+    "wiki:pull": "bash scripts/wiki-branch.sh restore",
+    "wiki:site": "tsx scripts/build-wiki-site.ts",
+    "wiki:stage": "tsx scripts/publish-wiki.ts",
     "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build && npm test"
   },

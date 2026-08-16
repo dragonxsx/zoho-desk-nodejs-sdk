@@ -1,0 +1,127 @@
+name: OpenWiki
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: openwiki
+  cancel-in-progress: false
+
+env:
+  IS_DEFAULT_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+  WIKI_BRANCH: openwiki
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Check required secret
+        run: |
+          if [ -z "${OPENROUTER_API_KEY}" ]; then
+            echo "::error::Secret OPENROUTER_API_KEY is not set. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Install OpenWiki
+        run: npm install --global openwiki mermaid@11.16.0 jsdom@29.1.1
+
+      - name: Restore wiki from branch
+        run: bash scripts/wiki-branch.sh restore
+
+      - name: Generate wiki
+        run: openwiki code --update --print
+        env:
+          OPENWIKI_PROVIDER: openrouter
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENWIKI_MODEL_ID: deepseek/deepseek-v4-flash-0731
+          OPENWIKI_TELEMETRY_DISABLED: "1"
+          DO_NOT_TRACK: "1"
+          LANGCHAIN_TRACING_V2: "false"
+          LANGSMITH_TRACING: "false"
+
+      - name: Publish wiki branch
+        if: env.IS_DEFAULT_BRANCH == 'true'
+        run: bash scripts/wiki-branch.sh publish
+
+      - name: Commit agent instructions
+        if: env.IS_DEFAULT_BRANCH == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- AGENTS.md CLAUDE.md
+          if git diff --cached --quiet; then
+            echo "No agent instruction changes."
+          else
+            git commit -m "docs: update OpenWiki agent instructions"
+            git push || {
+              git pull --rebase
+              git push
+            }
+          fi
+
+      - name: Publish to GitHub Wiki
+        if: env.IS_DEFAULT_BRANCH == 'true'
+        run: |
+          npm run wiki:stage
+
+          if ! git clone --depth 1 "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" .wiki; then
+            echo "::error::Could not clone the wiki. Enable Wikis under Settings > Features and create one page by hand -- ${GITHUB_REPOSITORY}.wiki.git does not exist until the first page is saved."
+            exit 1
+          fi
+
+          find .wiki -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
+          cp -R .wiki-stage/. .wiki/
+
+          cd .wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Wiki already up to date."
+          else
+            git commit -m "docs: sync OpenWiki (${GITHUB_SHA:0:7})"
+            git push
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Pages site
+        run: npm run wiki:site
+
+      - uses: actions/upload-pages-artifact@v3
+        if: env.IS_DEFAULT_BRANCH == 'true'
+        with:
+          path: wiki-site
+
+  deploy:
+    needs: generate
+    if: needs.generate.result == 'success' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
