@@ -5,19 +5,25 @@ import path from "node:path";
 
 import {
   buildGraph,
+  linkKind,
   PROJECT_DIR,
-  REPO_SLUG,
-  sourceRef,
-  WIKI_DIR,
+  replaceMarkdownLinks,
+  repoFileHref,
+  resolveTarget,
+  resolveWikiDir,
+  splitAnchor,
+  wikiSource,
   type WikiGraph,
+  type WikiSource,
 } from "./openwiki-graph.js";
 
 const OUTPUT_DIR = path.join(PROJECT_DIR, "wiki-site");
 
-interface Source {
-  repo: string;
-  ref: string;
+interface Source extends WikiSource {
+  /** The wiki tree's path within the repository, for linking non-page files. */
   wiki: string;
+  /** `https://github.com/<repo>/blob/<ref>/`, so the client never builds URLs itself. */
+  blobBase: string;
 }
 
 const CDN = {
@@ -161,7 +167,6 @@ main { flex: 1; display: flex; min-height: 0; }
   color: var(--muted);
 }
 .doc a { color: var(--accent); }
-.doc a[data-goto] { cursor: pointer; text-decoration: underline; }
 .doc img { max-width: 100%; }
 .doc h1, .doc h2, .doc h3 { scroll-margin-top: 12px; }
 .mermaid { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; overflow-x: auto; text-align: center; }
@@ -181,77 +186,67 @@ footer { color: var(--muted); font-size: 12px; padding: 10px 20px; border-top: 1
 
 const CLIENT = `
 var PALETTE = ['#6ea8fe','#f5a97f','#a6da95','#c6a0f6','#ee99a0','#8bd5ca','#eed49f','#b7bdf8','#f0c6c6','#91d7e3'];
+var SOURCE = window.WIKI_SOURCE || {};
 var state = { graph: null, byId: new Map(), color: new Map(), active: new Set(), query: '', current: null };
 var chart = null;
+var labelColor = '#e6e9ef';
 
 function colorFor(type) { return state.color.get(type) || '#8892a4'; }
 
 function matches(node) {
   if (state.active.size && !state.active.has(node.type)) return false;
-  if (!state.query) return true;
-  var q = state.query;
-  return (node.title + ' ' + node.description + ' ' + node.tags.join(' ') + ' ' + node.id + ' ' + node.body).toLowerCase().indexOf(q) !== -1;
+  return !state.query || node.hay.indexOf(state.query) !== -1;
 }
 
-function visibleData() {
-  var nodes = state.graph.nodes.filter(matches);
-  var ids = new Set(nodes.map(function (n) { return n.id; }));
-  var links = state.graph.edges
-    .filter(function (e) { return ids.has(e.source) && ids.has(e.target); })
-    .map(function (e) { return { source: e.source, target: e.target }; });
+function visibleIds() {
+  var ids = new Set();
+  state.graph.nodes.forEach(function (n) { if (matches(n)) ids.add(n.id); });
+  return ids;
+}
+
+function graphData(ids) {
+  var links = [];
   var degree = new Map();
-  links.forEach(function (l) {
-    degree.set(l.source, (degree.get(l.source) || 0) + 1);
-    degree.set(l.target, (degree.get(l.target) || 0) + 1);
+
+  ids.forEach(function (id) {
+    state.byId.get(id).links.forEach(function (target) {
+      if (!ids.has(target)) return;
+      links.push({ source: id, target: target });
+      degree.set(id, (degree.get(id) || 0) + 1);
+      degree.set(target, (degree.get(target) || 0) + 1);
+    });
   });
-  return {
-    nodes: nodes.map(function (n) {
-      return { id: n.id, title: n.title, type: n.type, val: 1 + (degree.get(n.id) || 0) };
-    }),
-    links: links
-  };
+
+  var nodes = [];
+  ids.forEach(function (id) {
+    var n = state.byId.get(id);
+    nodes.push({ id: id, title: n.title, type: n.type, val: 1 + (degree.get(id) || 0) });
+  });
+
+  return { nodes: nodes, links: links };
+}
+
+var lastIds = null;
+
+function sameIds(a, b) {
+  if (!b || a.size !== b.size) return false;
+  var same = true;
+  a.forEach(function (id) { if (!b.has(id)) same = false; });
+  return same;
 }
 
 function refresh() {
-  var data = visibleData();
+  var ids = visibleIds();
   document.getElementById('count').textContent =
-    data.nodes.length + ' of ' + state.graph.nodes.length + ' pages';
-  chart.graphData(data);
+    ids.size + ' of ' + state.graph.nodes.length + ' pages';
+  // Re-seeding the simulation discards node positions, so only do it when the set changed.
+  if (sameIds(ids, lastIds)) return;
+  lastIds = ids;
+  chart.graphData(graphData(ids));
 }
 
 function escapeHtml(value) {
   return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function resolveTarget(fromId, href) {
-  var hash = href.indexOf('#');
-  var anchor = hash === -1 ? '' : href.slice(hash + 1);
-  var file = hash === -1 ? href : href.slice(0, hash);
-  var dir = fromId.indexOf('/') === -1 ? '' : fromId.slice(0, fromId.lastIndexOf('/'));
-  var parts = (dir ? dir.split('/') : []).concat(file.split('/'));
-  var stack = [];
-  var escaped = false;
-  parts.forEach(function (part) {
-    if (!part || part === '.') return;
-    if (part === '..') {
-      if (stack.length) stack.pop(); else escaped = true;
-      return;
-    }
-    stack.push(part);
-  });
-  // A directory link such as "architecture/" means that section's index page.
-  if (!escaped && file.charAt(file.length - 1) === '/') stack.push('index.md');
-  var joined = stack.join('/');
-  var id = escaped ? null : joined;
-  if (id && !state.byId.has(id) && state.byId.has(id + '/index.md')) id = id + '/index.md';
-  return { id: id, path: joined, anchor: anchor, escaped: escaped };
-}
-
-function sourceHref(repoPath, anchor) {
-  var source = window.WIKI_SOURCE || {};
-  if (!source.repo || !repoPath) return null;
-  return 'https://github.com/' + source.repo + '/blob/' + source.ref + '/' + repoPath +
-    (anchor ? '#' + anchor : '');
 }
 
 function slugify(text) {
@@ -289,8 +284,7 @@ function scrollToAnchor(reader, anchor) {
 function linkList(title, ids) {
   if (!ids.length) return '';
   var items = ids.map(function (id) {
-    var node = state.byId.get(id);
-    return '<li><a data-goto="' + escapeHtml(id) + '">' + escapeHtml(node ? node.title : id) + '</a></li>';
+    return '<li><a href="#' + encodeURIComponent(id) + '">' + escapeHtml(state.byId.get(id).title) + '</a></li>';
   }).join('');
   return '<h4>' + title + '</h4><ul>' + items + '</ul>';
 }
@@ -318,7 +312,7 @@ function select(id, push, anchor) {
       : '');
 
   slugCounts = new Map();
-  var body = DOMPurify.sanitize(marked.parse(node.body), { ADD_ATTR: ['data-goto', 'data-anchor'] });
+  var body = DOMPurify.sanitize(marked.parse(node.body));
   var related = linkList('Links out', node.links) + linkList('Linked from', node.backlinks);
 
   reader.className = '';
@@ -327,47 +321,15 @@ function select(id, push, anchor) {
     (related ? '<div class="rel">' + related + '</div>' : '');
   reader.scrollTop = 0;
 
-  // Every relative href must end up either in-app or pointing at GitHub. One left as-is
-  // would navigate the browser out of this single page and land on a Pages 404.
+  // Anything still relative would navigate off the SPA into a Pages 404.
   reader.querySelectorAll('.doc a[href]').forEach(function (link) {
     var href = link.getAttribute('href') || '';
-    if (!href || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.charAt(0) === '#') return;
-
-    var source = window.WIKI_SOURCE || {};
-    var external = function (repoPath, anchor) {
-      var url = sourceHref(repoPath, anchor);
-      if (!url) return;
-      link.setAttribute('href', url);
-      link.setAttribute('target', '_blank');
-      link.setAttribute('rel', 'noreferrer');
-    };
-
-    // "/README.md" and friends are rooted at the repository, not at this site.
-    if (href.charAt(0) === '/') {
-      var split = href.indexOf('#');
-      external(
-        (split === -1 ? href : href.slice(0, split)).replace(/^[/]+/, ''),
-        split === -1 ? '' : href.slice(split + 1)
-      );
-      return;
+    if (href.charAt(0) === '#') return;
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(href) && href.indexOf('//') !== 0) {
+      link.setAttribute('href', SOURCE.blobBase + href.replace(/^[/]+/, ''));
     }
-
-    var target = resolveTarget(node.id, href);
-    if (target.id && state.byId.has(target.id)) {
-      link.setAttribute('data-goto', target.id);
-      if (target.anchor) link.setAttribute('data-anchor', target.anchor);
-      link.removeAttribute('href');
-      return;
-    }
-
-    var repoPath = target.escaped || !source.wiki ? target.path : source.wiki + '/' + target.path;
-    external(repoPath, target.anchor);
-  });
-
-  reader.querySelectorAll('.doc a[href^="#"]').forEach(function (link) {
-    link.setAttribute('data-goto', node.id);
-    link.setAttribute('data-anchor', link.getAttribute('href').slice(1));
-    link.removeAttribute('href');
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noreferrer');
   });
 
   renderMermaid(reader);
@@ -390,6 +352,22 @@ function renderMermaid(root) {
   });
 }
 
+function resolveRoute(value) {
+  if (!value) return null;
+  if (state.byId.has(value)) return value;
+  var id = state.graph.routes[value.toLowerCase().replace(/[/]+$/, '')];
+  return typeof id === 'string' ? id : null;
+}
+
+function goTo(hash, push) {
+  var split = hash.indexOf('#');
+  var raw = split === -1 ? hash : hash.slice(0, split);
+  var anchor = split === -1 ? '' : hash.slice(split + 1);
+  var id = null;
+  try { id = resolveRoute(decodeURIComponent(raw)); } catch (error) { id = resolveRoute(raw); }
+  select(id || state.graph.home, push, anchor);
+}
+
 function buildFilters() {
   var host = document.getElementById('filters');
   state.graph.types.forEach(function (type, index) {
@@ -409,6 +387,9 @@ function buildFilters() {
 
 function initGraph() {
   var host = document.getElementById('graph');
+  var fontScale = 0;
+  var fontSpec = '';
+
   chart = ForceGraph()(host)
     .nodeId('id')
     .nodeRelSize(4)
@@ -421,8 +402,12 @@ function initGraph() {
     .nodeCanvasObjectMode(function () { return 'after'; })
     .nodeCanvasObject(function (n, ctx, scale) {
       if (scale < 1.4) return;
-      ctx.font = (11 / scale) + 'px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillStyle = getComputedStyle(document.body).color;
+      if (scale !== fontScale) {
+        fontScale = scale;
+        fontSpec = (11 / scale) + 'px ui-sans-serif, system-ui, sans-serif';
+      }
+      ctx.font = fontSpec;
+      ctx.fillStyle = labelColor;
       ctx.textBaseline = 'middle';
       ctx.fillText(n.title, n.x + 7, n.y);
     })
@@ -438,10 +423,10 @@ function initGraph() {
 }
 
 document.addEventListener('click', function (event) {
-  var link = event.target.closest('[data-goto]');
+  var link = event.target.closest && event.target.closest('a[href^="#"]');
   if (!link) return;
   event.preventDefault();
-  select(link.getAttribute('data-goto'), true, link.getAttribute('data-anchor') || '');
+  goTo(link.getAttribute('href').slice(1), true);
 });
 
 function boot() {
@@ -449,10 +434,13 @@ function boot() {
     .then(function (response) { return response.json(); })
     .then(function (graph) {
       state.graph = graph;
-      graph.nodes.forEach(function (n) { state.byId.set(n.id, n); });
+      graph.nodes.forEach(function (n) {
+        state.byId.set(n.id, n);
+        n.hay = (n.title + ' ' + n.description + ' ' + n.tags.join(' ') + ' ' + n.id + ' ' + n.body).toLowerCase();
+      });
 
-      var dark = matchMedia('(prefers-color-scheme: dark)').matches;
-      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default' });
+      var dark = matchMedia('(prefers-color-scheme: dark)');
+      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark.matches ? 'dark' : 'default' });
       marked.use({
         renderer: {
           heading: function (text, level) {
@@ -460,6 +448,10 @@ function boot() {
           }
         }
       });
+
+      var readLabelColor = function () { labelColor = getComputedStyle(document.body).color; };
+      readLabelColor();
+      dark.addEventListener('change', readLabelColor);
 
       document.getElementById('generated').textContent = new Date(graph.generatedAt).toUTCString();
       buildFilters();
@@ -472,12 +464,7 @@ function boot() {
         refresh();
       });
 
-      var hash = (location.hash || '').slice(1);
-      var split = hash.indexOf('#');
-      var initial = decodeURIComponent(split === -1 ? hash : hash.slice(0, split));
-      var initialAnchor = split === -1 ? '' : hash.slice(split + 1);
-      var fallback = state.byId.has('index.md') ? 'index.md' : graph.nodes[0] && graph.nodes[0].id;
-      select(state.byId.has(initial) ? initial : fallback, false, initialAnchor);
+      goTo((location.hash || '').slice(1), false);
     })
     .catch(function (error) {
       document.getElementById('reader').innerHTML =
@@ -493,20 +480,58 @@ function script(entry: { src: string; integrity: string }): string {
   return `<script src="${entry.src}" integrity="${entry.integrity}" crossorigin="anonymous" referrerpolicy="no-referrer"></script>`;
 }
 
-function renderPage(graph: WikiGraph, source: Source): string {
-  const name = source.repo.split("/").pop() ?? source.repo;
-  const sourceJson = JSON.stringify(source).replace(/</g, "\\u003c");
+function jsonLiteral(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+function repoName(repo: string): string {
+  return repo.split("/").pop() ?? repo;
+}
+
+function htmlShell(parts: { title: string; head?: string; style: string; body: string }): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${name} wiki</title>
-<meta name="description" content="Interactive graph of the ${name} OpenWiki documentation.">
-<style>${STYLES}</style>
+<title>${parts.title}</title>
+${parts.head ?? ""}<style>${parts.style}</style>
 </head>
 <body>
-<header>
+${parts.body}
+</body>
+</html>
+`;
+}
+
+/** Rewrites every link to its final form: an in-app `#<id>` route, or an absolute GitHub URL. */
+function resolveBodies(graph: WikiGraph, source: Source): void {
+  const known = new Set(graph.nodes.map((node) => node.id));
+
+  for (const node of graph.nodes) {
+    node.body = replaceMarkdownLinks(node.body, (target) => {
+      const kind = linkKind(target);
+      if (kind === "anchor") return `#${encodeURIComponent(node.id)}${target}`;
+
+      const [file, anchor] = splitAnchor(target);
+      if (kind === "repo") return repoFileHref(source.repo, source.ref, file, anchor);
+
+      const { id, escaped } = resolveTarget(node.id, target);
+      if (known.has(id)) return `#${encodeURIComponent(id)}${anchor}`;
+
+      const repoPath = escaped ? id.replace(/^(?:\.\.\/)+/, "") : `${source.wiki}/${id}`;
+      return repoFileHref(source.repo, source.ref, repoPath, anchor);
+    });
+  }
+}
+
+function renderPage(graph: WikiGraph, source: Source): string {
+  const name = repoName(source.repo);
+  return htmlShell({
+    title: `${name} wiki`,
+    head: `<meta name="description" content="Interactive graph of the ${name} OpenWiki documentation.">\n`,
+    style: STYLES,
+    body: `<header>
   <h1>${name} <span>wiki</span></h1>
   <input id="search" type="search" placeholder="Search pages, tags and content" autocomplete="off" spellcheck="false">
   <div id="filters"></div>
@@ -524,72 +549,38 @@ ${script(CDN.forceGraph)}
 ${script(CDN.marked)}
 ${script(CDN.domPurify)}
 ${script(CDN.mermaid)}
-<script>window.WIKI_SOURCE = ${sourceJson};</script>
-<script>${CLIENT}</script>
-</body>
-</html>
-`;
+<script>window.WIKI_SOURCE = ${jsonLiteral({ blobBase: source.blobBase })};</script>
+<script>${CLIENT}</script>`,
+  });
 }
 
-/** Base path this site is served from, e.g. `/zoho-desk-nodejs-sdk/` for a project page. */
+/** `/repo-name/` for a project page, `/` for a user page. */
 function basePath(repo: string): string {
-  const name = repo.split("/").pop() ?? repo;
+  const name = repoName(repo);
   return name.toLowerCase().endsWith(".github.io") ? "/" : `/${name}/`;
 }
 
-/**
- * Every URL path that should resolve to a page, so a stray `/architecture/` can be
- * mapped back onto its `#architecture/index.md` route instead of dead-ending.
- */
-function routeTable(graph: WikiGraph): Record<string, string> {
-  const routes: Record<string, string> = {};
-  const claim = (key: string, id: string): void => {
-    const normalized = key.toLowerCase();
-    if (!(normalized in routes)) routes[normalized] = id;
-  };
-
-  for (const node of graph.nodes) {
-    const stem = node.id.replace(/\.md$/i, "");
-    const segments = stem.split("/");
-    const isIndex = segments[segments.length - 1].toLowerCase() === "index";
-    const bare = isIndex ? segments.slice(0, -1).join("/") : stem;
-
-    claim(node.id, node.id);
-    claim(stem, node.id);
-    claim(bare, node.id);
-    claim(`${bare}/`, node.id);
-    // The GitHub Wiki flattens the same page to `architecture-overview`.
-    claim(bare.split("/").join("-"), node.id);
-  }
-
-  delete routes[""];
-  return routes;
+/** Pages serves this for any deep path; it just hands the path to the single-page app. */
+function renderNotFound(source: Source): string {
+  return htmlShell({
+    title: `${repoName(source.repo)} wiki`,
+    head: `<meta name="robots" content="noindex">\n`,
+    style: `
+:root { color-scheme: light dark; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 24px;
+  text-align: center;
+  font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
-
-function renderNotFound(graph: WikiGraph, source: Source): string {
-  const name = source.repo.split("/").pop() ?? source.repo;
-  const base = JSON.stringify(basePath(source.repo));
-  const routes = JSON.stringify(routeTable(graph)).replace(/</g, "\\u003c");
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${name} wiki</title>
-<meta name="robots" content="noindex">
-<style>${STYLES}
-main { align-items: center; justify-content: center; padding: 40px 24px; text-align: center; }
-main p { color: var(--muted); }
-main a { color: var(--accent); }
-</style>
-</head>
-<body>
-<main><p>This wiki lives on a single page. <a id="home" href=".">Open the wiki</a>.</p></main>
+`,
+    body: `<p>This wiki lives on a single page. <a id="home" href=".">Open the wiki</a>.</p>
 <script>
 (function () {
-  var BASE = ${base};
-  var ROUTES = ${routes};
-
+  var BASE = ${jsonLiteral(basePath(source.repo))};
   var pathname = location.pathname;
   var base = pathname.indexOf(BASE) === 0 ? BASE : '/';
   var rest = pathname.slice(base.length);
@@ -599,47 +590,43 @@ main a { color: var(--accent); }
   try { rest = decodeURIComponent(rest); } catch (error) { /* keep the raw path */ }
   rest = rest.replace(/^[/]+/, '');
 
-  var id = ROUTES[rest.toLowerCase()];
-  if (!id && rest) id = ROUTES[rest.replace(/[/]+$/, '').toLowerCase()];
-
-  var anchor = (location.hash || '').slice(1);
-  location.replace(
-    base + (id ? '#' + encodeURIComponent(id) + (anchor ? '#' + anchor : '') : '')
-  );
+  location.replace(base + (rest ? '#' + rest + location.hash : location.hash));
 })();
-</script>
-</body>
-</html>
-`;
+</script>`,
+  });
 }
 
 function main(): void {
-  const wikiDir = process.argv[2] ? path.resolve(process.argv[2]) : WIKI_DIR;
+  const wikiDir = resolveWikiDir();
   const graph = buildGraph(wikiDir);
   const relative = path.relative(PROJECT_DIR, wikiDir).split(path.sep).join("/");
+  const base = wikiSource();
   const source: Source = {
-    repo: REPO_SLUG,
-    ref: sourceRef(),
+    ...base,
     wiki: relative.startsWith("..") || path.isAbsolute(relative) ? path.basename(wikiDir) : relative,
+    blobBase: repoFileHref(base.repo, base.ref, ""),
   };
 
-  if (graph.nodes.length === 0) {
-    console.error(`Error: no wiki pages found in ${wikiDir}`);
-    process.exit(1);
-  }
+  resolveBodies(graph, source);
 
   fs.rmSync(OUTPUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
   fs.writeFileSync(path.join(OUTPUT_DIR, "graph.json"), JSON.stringify(graph));
   fs.writeFileSync(path.join(OUTPUT_DIR, "index.html"), renderPage(graph, source));
-  fs.writeFileSync(path.join(OUTPUT_DIR, "404.html"), renderNotFound(graph, source));
+  fs.writeFileSync(path.join(OUTPUT_DIR, "404.html"), renderNotFound(source));
   fs.writeFileSync(path.join(OUTPUT_DIR, ".nojekyll"), "");
 
+  const links = graph.nodes.reduce((total, node) => total + node.links.length, 0);
   console.log(
-    `Built ${OUTPUT_DIR}: ${graph.nodes.length} pages, ${graph.edges.length} links, ${graph.types.length} types.`,
+    `Built ${OUTPUT_DIR}: ${graph.nodes.length} pages, ${links} links, ${graph.types.length} types.`,
   );
   console.log("Preview with: npx serve wiki-site");
 }
 
-main();
+try {
+  main();
+} catch (error) {
+  console.error(`Error: ${error instanceof Error ? error.message : error}`);
+  process.exit(1);
+}

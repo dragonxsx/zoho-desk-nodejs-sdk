@@ -12,6 +12,10 @@ git_repo() {
   git -C "$PROJECT_DIR" "$@"
 }
 
+git_tree() {
+  git -C "$WORKTREE_DIR" "$@"
+}
+
 branch_exists() {
   git_repo ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1
 }
@@ -20,7 +24,7 @@ fetch_branch() {
   git_repo fetch --no-tags --force origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
 }
 
-# The commit OpenWiki recorded as documented, read from a .last-update.json on stdin.
+# Reads "gitHead" (the last documented commit) from a .last-update.json on stdin.
 read_git_head() {
   sed -n 's/.*"gitHead"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{7,40\}\)".*/\1/p' | head -1
 }
@@ -78,31 +82,29 @@ publish() {
       git_repo branch -D "$BRANCH" >/dev/null
     fi
     git_repo worktree add --detach --no-checkout "$WORKTREE_DIR" HEAD
-    git -C "$WORKTREE_DIR" checkout --quiet --orphan "$BRANCH"
-    git -C "$WORKTREE_DIR" rm -r --quiet --cached .
+    git_tree checkout --quiet --orphan "$BRANCH"
+    git_tree rm -r --quiet --cached .
   fi
 
   if [ -f "${WIKI_DIR}/.last-update.json" ]; then
     new_head="$(read_git_head < "${WIKI_DIR}/.last-update.json")"
   fi
-  if [ -z "$new_head" ]; then
-    new_head="$(git_repo rev-parse HEAD)"
-  fi
+  new_head="${new_head:-$(git_repo rev-parse HEAD)}"
 
   find "$WORKTREE_DIR" -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
   cp -R "${WIKI_DIR}/." "${WORKTREE_DIR}/"
 
-  git -C "$WORKTREE_DIR" add -A
-  if git -C "$WORKTREE_DIR" diff --cached --quiet; then
+  git_tree add -A
+  if git_tree diff --cached --quiet; then
     echo "Branch '${BRANCH}' is already up to date."
   else
     if [ -n "${GITHUB_ACTIONS:-}" ]; then
-      git -C "$WORKTREE_DIR" config user.name "github-actions[bot]"
-      git -C "$WORKTREE_DIR" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      git_tree config user.name "github-actions[bot]"
+      git_tree config user.email "41898282+github-actions[bot]@users.noreply.github.com"
     fi
 
-    commit_message "$prev_head" "$new_head" | git -C "$WORKTREE_DIR" commit --quiet -F -
-    git -C "$WORKTREE_DIR" push origin "HEAD:refs/heads/${BRANCH}"
+    commit_message "$prev_head" "$new_head" | git_tree commit --quiet -F -
+    git_tree push origin "HEAD:refs/heads/${BRANCH}"
     echo "Pushed the wiki to '${BRANCH}' (generated from ${new_head:0:7})."
   fi
 
