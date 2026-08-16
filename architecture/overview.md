@@ -59,19 +59,18 @@ sequenceDiagram
 
 ## Request Flow (Caller to Zoho)
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Parse error on line 4: ...> D[create*ApiClient(adapter)] D -> Expecting 'SQE', 'DOUBLECIRCLEEND', 'PE', '-)', 'STADIUMEND', 'SUBROUTINEEND', 'PIPE', 'CYLINDEREND', 'DIAMOND_STOP', 'TAGEND', 'TRAPEND', 'INVTRAPEND', 'UNICODE_TEXT', 'TEXT', 'TAGSTART', got 'PS' -->
-```text
+```mermaid
 flowchart LR
     A[Your App] --> B[ZohoDeskClient]
     B -->|first access| C[lazy getter]
-    C --> D[create*ApiClient(adapter)]
+    C --> D["create*ApiClient(adapter)"]
     D --> E[Generated request builder]
     E --> F[FetchRequestAdapter]
     F --> G[EmptyQueryParamMiddleware]
     G --> H[ZohoErrorMiddleware]
     H --> I[RetryHandler]
     I --> J[Kiota default middlewares]
-    J --> K[fetch (optionally proxied)]
+    J --> K["fetch (optionally proxied)"]
     K -->|non-2xx response| H
     H --> L[ZohoApiError]
     L --> A

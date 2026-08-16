@@ -11,14 +11,13 @@ The HTTP transport layer is built on Kiota's `FetchRequestAdapter` with a custom
 
 ## Middleware Chain Order
 
-<!-- openwiki: mermaid parse failed and this diagram was converted to a text fence so it does not break rendering. Fix the diagram source and restore the mermaid fence. Parser error: Parse error on line 3: ...->|adapter.sendAsync()| B[FetchRequestAd Expecting 'SQE', 'DOUBLECIRCLEEND', 'PE', '-)', 'STADIUMEND', 'SUBROUTINEEND', 'PIPE', 'CYLINDEREND', 'DIAMOND_STOP', 'TAGEND', 'TRAPEND', 'INVTRAPEND', 'UNICODE_TEXT', 'TEXT', 'TAGSTART', got 'PS' -->
-```text
+```mermaid
 flowchart LR
     A[Generated Request Builder]
-    A -->|adapter.sendAsync()| B[FetchRequestAdapter]
+    A -->|"adapter.sendAsync()"| B[FetchRequestAdapter]
     B --> C[EmptyQueryParamMiddleware]
     C --> D[ZohoErrorMiddleware]
-    D --> E[RetryHandler (custom)]
+    D --> E["RetryHandler (custom)"]
     E --> F[Kiota Default Middlewares]
     F -->|custom fetch| G[Node fetch via undici]
     G --> H[Zoho Desk API]
