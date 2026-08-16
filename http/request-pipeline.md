@@ -149,4 +149,4 @@ npx vitest run tests/zoho-error-middleware.test.ts tests/empty-query-param-middl
 - [Configuration](../domain/configuration.md) — SDKConfig retry settings and proxy configuration
 - [Exceptions](../domain/exceptions.md) — ZohoApiError structure
 - [Facade Client](../client/facade.md) — how the adapter is created in createAdapter()
-- [Architecture Overview](../architecture/overview.md) — request flow diagrammd) — request flow diagram
+- [Architecture Overview](../architecture/overview.md) — request flow diagram
